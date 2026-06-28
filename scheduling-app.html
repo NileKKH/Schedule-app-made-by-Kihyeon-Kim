@@ -1,0 +1,1309 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>일정관리 — PwC</title>
+<style>
+  /* ===== 기본 리셋 & 변수 ===== */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f0f2f5;
+    --panel-bg: #ffffff;
+    --border: #e2e6ea;
+    --text: #212529;
+    --text-muted: #6c757d;
+    --primary: #2c5282;        /* 진한 파란색 — Todo 블록 */
+    --primary-light: #ebf4ff;  /* 연한 파란 — Todo 블록 배경 */
+    --assign-bg: #cce5f6;      /* 연한 하늘색 — 클라이언트 주간 블록 */
+    --assign-text: #1a6fa8;
+    --yellow: #fff3cd;         /* 미배정 Todo 노란 배경 */
+    --yellow-border: #ffc107;
+    --done-text: #6c757d;
+    --radius: 6px;
+    --shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+
+  body {
+    font-family: 'Segoe UI', 'Malgun Gothic', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ===== 상단 헤더 ===== */
+  #header {
+    background: var(--primary);
+    color: #fff;
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-shrink: 0;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+  }
+  #header h1 { font-size: 1rem; font-weight: 600; letter-spacing: 0.5px; }
+  #month-nav { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+  #month-nav button {
+    background: rgba(255,255,255,0.2);
+    border: none; color: #fff;
+    width: 28px; height: 28px; border-radius: 50%;
+    cursor: pointer; font-size: 0.9rem;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #month-nav button:hover { background: rgba(255,255,255,0.35); }
+  #month-label { font-size: 0.95rem; font-weight: 600; min-width: 90px; text-align: center; }
+
+  /* ===== 3패널 레이아웃 ===== */
+  #main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    gap: 0;
+  }
+
+  .panel {
+    display: flex;
+    flex-direction: column;
+    background: var(--panel-bg);
+    border-right: 1px solid var(--border);
+    overflow: hidden;
+  }
+  .panel-header {
+    padding: 10px 14px 8px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .panel-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px;
+  }
+
+  /* ===== 패널 1 — 프로젝트 (15%) ===== */
+  #panel1 { width: 15%; min-width: 140px; }
+
+  .project-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 7px 9px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-size: 0.85rem;
+    margin-bottom: 4px;
+    border: 1px solid transparent;
+    transition: background 0.15s;
+    user-select: none;
+  }
+  .project-item:hover { background: #f0f4ff; border-color: #c5d5f5; }
+  .project-item.active { background: #dbeafe; border-color: #93c5fd; font-weight: 600; }
+  .project-item .proj-del {
+    opacity: 0;
+    background: none; border: none;
+    color: #dc3545; cursor: pointer; font-size: 0.75rem; padding: 0 2px;
+  }
+  .project-item:hover .proj-del { opacity: 1; }
+
+  .add-btn {
+    width: 100%; padding: 6px 0;
+    border: 1px dashed var(--border);
+    background: none; border-radius: var(--radius);
+    color: var(--text-muted); font-size: 0.82rem;
+    cursor: pointer; margin-top: 6px;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .add-btn:hover { border-color: var(--primary); color: var(--primary); }
+
+  /* ===== 패널 2 — Todo 리스트 (20%) ===== */
+  #panel2 { width: 20%; min-width: 190px; }
+
+  .todo-group { margin-bottom: 12px; }
+  .todo-group-label {
+    font-size: 0.72rem; font-weight: 700;
+    color: var(--assign-text);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 3px 4px 5px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 5px;
+  }
+
+  .todo-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 6px 8px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    margin-bottom: 4px;
+    font-size: 0.83rem;
+    cursor: grab;
+    background: #fff;
+    transition: box-shadow 0.15s;
+    position: relative;
+  }
+  .todo-item.unscheduled {
+    background: var(--yellow);
+    border-color: var(--yellow-border);
+  }
+  .todo-item.done-item .todo-title {
+    text-decoration: line-through;
+    color: var(--done-text);
+  }
+  .todo-item:active { cursor: grabbing; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+  .todo-item input[type=checkbox] { margin-top: 2px; flex-shrink: 0; cursor: pointer; }
+  .todo-title { flex: 1; line-height: 1.4; word-break: break-all; }
+  .todo-del {
+    opacity: 0; background: none; border: none;
+    color: #dc3545; cursor: pointer; font-size: 0.72rem;
+    position: absolute; top: 4px; right: 4px;
+  }
+  .todo-item:hover .todo-del { opacity: 1; }
+
+  .add-todo-form {
+    display: flex; flex-direction: column; gap: 5px;
+    margin-top: 8px;
+  }
+  .add-todo-form select, .add-todo-form input {
+    font-size: 0.82rem; padding: 5px 8px;
+    border: 1px solid var(--border); border-radius: var(--radius);
+    outline: none; font-family: inherit;
+  }
+  .add-todo-form select:focus, .add-todo-form input:focus {
+    border-color: var(--primary);
+  }
+  .add-todo-form button {
+    padding: 5px; background: var(--primary); color: #fff;
+    border: none; border-radius: var(--radius); cursor: pointer; font-size: 0.82rem;
+  }
+
+  /* ===== 패널 3 — 월간 캘린더 (65%) ===== */
+  #panel3 { width: 65%; border-right: none; }
+  #panel3 .panel-body { padding: 8px 10px; }
+
+  /* 주간 assign 버튼 */
+  #assign-btn-bar {
+    padding: 6px 10px 4px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  #assign-btn-bar button {
+    font-size: 0.78rem; padding: 4px 10px;
+    background: var(--assign-bg); color: var(--assign-text);
+    border: 1px solid #90cdf4; border-radius: var(--radius);
+    cursor: pointer;
+  }
+  #assign-btn-bar button:hover { background: #b3ddf2; }
+
+  /* 캘린더 요일 헤더 */
+  .cal-header {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+    margin-bottom: 3px;
+  }
+  .cal-header-cell {
+    text-align: center;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    padding: 3px 0;
+  }
+  .cal-header-cell:first-child { color: #c0392b; }
+  .cal-header-cell:last-child  { color: #2980b9; }
+
+  /* 주 단위 래퍼 */
+  .week-row { margin-bottom: 4px; }
+
+  /* 날짜 셀 그리드 */
+  .day-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+  }
+
+  .day-cell {
+    min-height: 80px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: #fff;
+    padding: 3px 4px;
+    font-size: 0.75rem;
+    position: relative;
+    overflow: hidden;
+    transition: background 0.1s;
+  }
+  .day-cell.other-month { background: #f8f9fa; }
+  .day-cell.today { border-color: var(--primary); border-width: 2px; }
+  .day-cell.drop-hover { background: #eff6ff; border-color: #3b82f6; border-style: dashed; }
+  .day-cell.sunday .day-num  { color: #c0392b; }
+  .day-cell.saturday .day-num { color: #2980b9; }
+
+  .day-num {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: 3px;
+  }
+  .day-cell.today .day-num {
+    background: var(--primary);
+    color: #fff;
+    border-radius: 50%;
+    width: 18px; height: 18px;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  /* 클라이언트 assign 블록 (얇음) */
+  .assign-block {
+    background: var(--assign-bg);
+    color: var(--assign-text);
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-size: 0.68rem;
+    font-weight: 600;
+    margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.5;
+    cursor: default;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .assign-block .del-assign {
+    opacity: 0; background: none; border: none;
+    color: var(--assign-text); cursor: pointer; font-size: 0.65rem; padding: 0 1px;
+  }
+  .assign-block:hover .del-assign { opacity: 1; }
+
+  /* Todo 블록 (캘린더 안) */
+  .cal-todo-block {
+    background: var(--primary-light);
+    border: 1px solid #bfdbfe;
+    border-left: 3px solid var(--primary);
+    border-radius: 3px;
+    padding: 2px 5px;
+    font-size: 0.72rem;
+    margin-bottom: 2px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    position: relative;
+    cursor: default;
+  }
+  .cal-todo-block.done-block {
+    background: #f0f0f0;
+    border-color: #ccc;
+    border-left-color: #999;
+  }
+  .cal-todo-block.done-block .cal-todo-title {
+    text-decoration: line-through;
+    color: var(--done-text);
+  }
+  .cal-todo-title { flex: 1; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cal-todo-block input[type=checkbox] { flex-shrink: 0; cursor: pointer; }
+  .cal-todo-del {
+    opacity: 0; background: none; border: none;
+    color: #dc3545; cursor: pointer; font-size: 0.68rem;
+  }
+  .cal-todo-block:hover .cal-todo-del { opacity: 1; }
+
+  /* 주차 확장 버튼 */
+  .week-expand-btn {
+    width: 100%;
+    margin-top: 3px;
+    padding: 3px 0;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    background: #f8f9fa;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    cursor: pointer;
+    text-align: center;
+  }
+  .week-expand-btn:hover { background: #e9ecef; color: var(--primary); }
+
+  /* 주차 확장 뷰 */
+  .week-detail {
+    margin-top: 4px;
+    border: 1px solid var(--primary);
+    border-radius: var(--radius);
+    background: #fafcff;
+    overflow: hidden;
+  }
+  .week-detail-header {
+    background: var(--primary);
+    color: #fff;
+    padding: 5px 12px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .week-detail-header button {
+    background: none; border: none; color: #fff; cursor: pointer; font-size: 0.82rem;
+  }
+  .week-detail-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+    padding: 6px;
+  }
+  .week-detail-cell {
+    min-height: 100px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: #fff;
+    padding: 4px 5px;
+    font-size: 0.75rem;
+  }
+  .week-detail-cell .day-label {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    font-weight: 600;
+    margin-bottom: 4px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 2px;
+  }
+
+  /* ===== 모달 / 오버레이 ===== */
+  .modal-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 1000;
+    align-items: center; justify-content: center;
+  }
+  .modal-overlay.active { display: flex; }
+  .modal {
+    background: #fff;
+    border-radius: 10px;
+    padding: 24px 28px;
+    width: 360px;
+    max-width: 95vw;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+  }
+  .modal h2 { font-size: 1rem; margin-bottom: 16px; color: var(--primary); }
+  .modal label { font-size: 0.82rem; color: var(--text-muted); display: block; margin-bottom: 3px; }
+  .modal input, .modal select {
+    width: 100%; padding: 7px 10px;
+    border: 1px solid var(--border); border-radius: var(--radius);
+    font-size: 0.85rem; font-family: inherit; margin-bottom: 12px; outline: none;
+  }
+  .modal input:focus, .modal select:focus { border-color: var(--primary); }
+  .modal-btns { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
+  .modal-btns button {
+    padding: 7px 16px; border-radius: var(--radius); border: none;
+    cursor: pointer; font-size: 0.85rem; font-family: inherit;
+  }
+  .btn-primary { background: var(--primary); color: #fff; }
+  .btn-primary:hover { background: #1e3a5f; }
+  .btn-secondary { background: #e9ecef; color: var(--text); }
+  .btn-secondary:hover { background: #dee2e6; }
+
+  /* ===== 초기 설정 화면 ===== */
+  #setup-screen {
+    display: none;
+    position: fixed; inset: 0;
+    background: linear-gradient(135deg, #1a365d, #2c5282);
+    z-index: 2000;
+    align-items: center; justify-content: center;
+    flex-direction: column;
+  }
+  #setup-screen.active { display: flex; }
+  .setup-card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 32px 36px;
+    width: 440px;
+    max-width: 95vw;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+  }
+  .setup-card h2 { color: var(--primary); font-size: 1.15rem; margin-bottom: 6px; }
+  .setup-card .subtitle { color: var(--text-muted); font-size: 0.83rem; margin-bottom: 20px; }
+  .setup-step {
+    background: #f8f9fa; border-radius: var(--radius);
+    padding: 10px 14px; margin-bottom: 10px;
+    font-size: 0.82rem; line-height: 1.6;
+  }
+  .setup-step strong { color: var(--primary); }
+  .setup-card label { font-size: 0.82rem; color: var(--text-muted); display: block; margin-bottom: 4px; }
+  .setup-card input {
+    width: 100%; padding: 8px 12px;
+    border: 1px solid var(--border); border-radius: var(--radius);
+    font-size: 0.85rem; font-family: 'Courier New', monospace;
+    margin-bottom: 10px; outline: none;
+  }
+  .setup-card input:focus { border-color: var(--primary); }
+  #setup-status { font-size: 0.8rem; color: #28a745; min-height: 18px; margin-bottom: 8px; }
+  #setup-status.error { color: #dc3545; }
+  .setup-btns { display: flex; gap: 8px; }
+  .setup-btns button {
+    flex: 1; padding: 9px; border: none; border-radius: var(--radius);
+    cursor: pointer; font-size: 0.85rem; font-family: inherit; font-weight: 600;
+  }
+  #btn-create-gist { background: #28a745; color: #fff; }
+  #btn-create-gist:hover { background: #218838; }
+  #btn-setup-save { background: var(--primary); color: #fff; }
+  #btn-setup-save:hover { background: #1e3a5f; }
+
+  /* ===== 스크롤바 ===== */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #c8cdd3; border-radius: 3px; }
+
+  /* ===== 워터마크 ===== */
+  #watermark {
+    position: fixed;
+    top: 10px;
+    left: 16px;
+    font-size: 0.68rem;
+    color: rgba(255,255,255,0.55);
+    pointer-events: none;
+    z-index: 9999;
+    letter-spacing: 0.3px;
+    font-style: italic;
+  }
+
+  /* ===== 모바일 ===== */
+  @media (max-width: 767px) {
+    #main { flex-direction: column; }
+    .panel { width: 100% !important; min-width: unset !important; border-right: none; border-bottom: 1px solid var(--border); }
+    #panel1 { max-height: 25vh; }
+    #panel2 { max-height: 30vh; }
+    #panel3 { flex: 1; }
+    .day-cell { min-height: 60px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ===== 초기 설정 화면 ===== -->
+<div id="setup-screen">
+  <div class="setup-card">
+    <h2>처음 사용 설정</h2>
+    <p class="subtitle">GitHub Gist를 이용해 데이터를 저장합니다. 완전 무료입니다.</p>
+
+    <div class="setup-step">
+      <strong>Step 1.</strong> <a href="https://github.com" target="_blank">github.com</a> 에서 계정을 만드세요 (무료)
+    </div>
+    <div class="setup-step">
+      <strong>Step 2.</strong> GitHub 로그인 후 →
+      오른쪽 위 프로필 클릭 → <strong>Settings</strong> →
+      왼쪽 아래 <strong>Developer settings</strong> →
+      <strong>Personal access tokens</strong> → <strong>Tokens (classic)</strong> →
+      <strong>Generate new token (classic)</strong> →
+      Note에 아무 이름 입력 → <strong>gist</strong> 체크 → 하단 <strong>Generate token</strong> 클릭 →
+      나온 토큰(ghp_xxx...)을 복사
+    </div>
+
+    <label>GitHub Personal Access Token</label>
+    <input type="password" id="input-token" placeholder="ghp_xxxxxxxxxxxxxxxx">
+
+    <div id="setup-status"></div>
+
+    <div class="setup-btns">
+      <button id="btn-create-gist">새 Gist 자동 생성 →</button>
+      <button id="btn-setup-save">저장 후 시작</button>
+    </div>
+
+    <p style="font-size:0.75rem; color:var(--text-muted); margin-top:12px;">
+      이미 Gist ID가 있으신 경우:
+      <input type="text" id="input-gist-id" placeholder="Gist ID (선택사항)" style="margin-top:4px; font-family:inherit; font-size:0.8rem;">
+    </p>
+  </div>
+</div>
+
+<!-- ===== 워터마크 ===== -->
+<div id="watermark">made by Kihyeon Kim</div>
+
+<!-- ===== 헤더 ===== -->
+<div id="header">
+  <h1>📋 일정관리</h1>
+  <div id="month-nav">
+    <button id="btn-prev-month">&#8592;</button>
+    <span id="month-label"></span>
+    <button id="btn-next-month">&#8594;</button>
+  </div>
+</div>
+
+<!-- ===== 메인 3패널 ===== -->
+<div id="main">
+
+  <!-- 패널 1: 진행중 프로젝트 -->
+  <div class="panel" id="panel1">
+    <div class="panel-header">진행중 프로젝트</div>
+    <div class="panel-body" id="project-list"></div>
+  </div>
+
+  <!-- 패널 2: Todo 리스트 -->
+  <div class="panel" id="panel2">
+    <div class="panel-header">Todo 리스트</div>
+    <div class="panel-body" id="todo-list"></div>
+  </div>
+
+  <!-- 패널 3: 월간 캘린더 -->
+  <div class="panel" id="panel3">
+    <div id="assign-btn-bar">
+      <button id="btn-add-assign">+ 기본 클라이언트 배정 추가</button>
+    </div>
+    <div class="panel-header">월간 캘린더</div>
+    <div class="panel-body" id="calendar-body"></div>
+  </div>
+
+</div>
+
+<!-- ===== 모달: 프로젝트 추가 ===== -->
+<div class="modal-overlay" id="modal-project">
+  <div class="modal">
+    <h2>프로젝트(클라이언트) 추가</h2>
+    <label>클라이언트명</label>
+    <input type="text" id="input-project-name" placeholder="예: 삼성전자">
+    <div class="modal-btns">
+      <button class="btn-secondary" onclick="closeModal('modal-project')">취소</button>
+      <button class="btn-primary" id="btn-save-project">추가</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 모달: Todo 추가 ===== -->
+<div class="modal-overlay" id="modal-todo">
+  <div class="modal">
+    <h2>Todo 추가</h2>
+    <label>클라이언트</label>
+    <select id="select-todo-project"></select>
+    <label>업무 내용</label>
+    <input type="text" id="input-todo-title" placeholder="예: 재무제표 검토">
+    <div class="modal-btns">
+      <button class="btn-secondary" onclick="closeModal('modal-todo')">취소</button>
+      <button class="btn-primary" id="btn-save-todo">추가</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 모달: 기본 클라이언트 배정 ===== -->
+<div class="modal-overlay" id="modal-assign">
+  <div class="modal">
+    <h2>기본 클라이언트 배정</h2>
+    <label>클라이언트</label>
+    <select id="select-assign-project"></select>
+    <label>주 선택 (해당 주 월요일 날짜)</label>
+    <select id="select-assign-week"></select>
+    <div class="modal-btns">
+      <button class="btn-secondary" onclick="closeModal('modal-assign')">취소</button>
+      <button class="btn-primary" id="btn-save-assign">배정</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// 상태 관리
+// ============================================================
+let state = {
+  projects: [],       // { id, clientName }
+  weekAssignments: [], // { id, projectId, weekStart, order }
+  todos: [],          // { id, projectId, title, startDate, endDate, done, order }
+  currentYear: new Date().getFullYear(),
+  currentMonth: new Date().getMonth(), // 0-based
+  expandedWeeks: new Set(), // "YYYY-MM-DD" (해당 주 월요일)
+  activeProjectFilter: null,
+  draggingTodoId: null,
+};
+
+let gistToken = localStorage.getItem('gist_token') || '';
+let gistId    = localStorage.getItem('gist_id')    || '';
+let saveTimer = null;
+
+// ============================================================
+// 유틸
+// ============================================================
+function uuid() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2);
+}
+function toDateStr(d) {
+  return d.toFullYear ? null : d.toISOString().slice(0,10);
+}
+function dateStr(y, m, d) {
+  return `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+}
+function parseDate(s) {
+  if (!s) return null;
+  const [y,m,d] = s.split('-').map(Number);
+  return new Date(y, m-1, d);
+}
+function mondayOf(dateStr) {
+  const d = parseDate(dateStr);
+  const day = d.getDay(); // 0=Sun
+  const diff = (day === 0) ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  return toISO(d);
+}
+function toISO(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function addDays(dateStr, n) {
+  const d = parseDate(dateStr);
+  d.setDate(d.getDate() + n);
+  return toISO(d);
+}
+function isBetween(ds, start, end) {
+  return ds >= start && ds <= end;
+}
+function getWeekStart(dateStr) {
+  // 해당 날짜가 속한 주의 일요일 반환
+  const d = parseDate(dateStr);
+  const day = d.getDay();
+  d.setDate(d.getDate() - day);
+  return toISO(d);
+}
+
+// ============================================================
+// GitHub Gist API
+// ============================================================
+async function loadFromGist() {
+  if (!gistToken || !gistId) return;
+  try {
+    const res = await fetch(`https://api.github.com/gists/${gistId}`, {
+      headers: { Authorization: `token ${gistToken}` }
+    });
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    const raw = data.files['schedule.json']?.content;
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      state.projects        = parsed.projects        || [];
+      state.weekAssignments = parsed.weekAssignments || [];
+      state.todos           = parsed.todos           || [];
+    }
+  } catch(e) {
+    console.warn('Gist 불러오기 실패:', e);
+  }
+}
+
+async function saveToGist() {
+  if (!gistToken || !gistId) return;
+  const payload = {
+    projects:        state.projects,
+    weekAssignments: state.weekAssignments,
+    todos:           state.todos,
+  };
+  try {
+    await fetch(`https://api.github.com/gists/${gistId}`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `token ${gistToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        files: { 'schedule.json': { content: JSON.stringify(payload, null, 2) } }
+      })
+    });
+  } catch(e) {
+    console.warn('Gist 저장 실패:', e);
+  }
+}
+
+function scheduleSave() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveToGist, 1200);
+}
+
+async function createNewGist(token) {
+  const res = await fetch('https://api.github.com/gists', {
+    method: 'POST',
+    headers: {
+      Authorization: `token ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      description: 'PwC 일정관리 데이터',
+      public: false,
+      files: { 'schedule.json': { content: JSON.stringify({ projects:[], weekAssignments:[], todos:[] }, null, 2) } }
+    })
+  });
+  if (!res.ok) throw new Error('토큰이 올바르지 않거나 gist 권한이 없습니다.');
+  const data = await res.json();
+  return data.id;
+}
+
+// ============================================================
+// 초기 설정 UI
+// ============================================================
+function showSetup() {
+  document.getElementById('setup-screen').classList.add('active');
+}
+function hideSetup() {
+  document.getElementById('setup-screen').classList.remove('active');
+}
+
+document.getElementById('btn-create-gist').addEventListener('click', async () => {
+  const token = document.getElementById('input-token').value.trim();
+  const statusEl = document.getElementById('setup-status');
+  if (!token) { statusEl.textContent = '토큰을 입력해주세요.'; statusEl.className = 'error'; return; }
+  statusEl.textContent = 'Gist 생성 중...'; statusEl.className = '';
+  try {
+    const id = await createNewGist(token);
+    document.getElementById('input-gist-id').value = id;
+    statusEl.textContent = `✅ Gist 생성 완료! ID: ${id}`;
+    statusEl.className = '';
+  } catch(e) {
+    statusEl.textContent = `❌ ${e.message}`;
+    statusEl.className = 'error';
+  }
+});
+
+document.getElementById('btn-setup-save').addEventListener('click', async () => {
+  const token = document.getElementById('input-token').value.trim();
+  const id    = document.getElementById('input-gist-id').value.trim();
+  const statusEl = document.getElementById('setup-status');
+  if (!token || !id) { statusEl.textContent = '토큰과 Gist ID가 모두 필요합니다.'; statusEl.className = 'error'; return; }
+  gistToken = token; gistId = id;
+  localStorage.setItem('gist_token', token);
+  localStorage.setItem('gist_id', id);
+  statusEl.textContent = '데이터 불러오는 중...'; statusEl.className = '';
+  await loadFromGist();
+  hideSetup();
+  render();
+});
+
+// ============================================================
+// 렌더링 — 패널 1
+// ============================================================
+function renderProjects() {
+  const el = document.getElementById('project-list');
+  el.innerHTML = '';
+
+  state.projects.forEach(p => {
+    const div = document.createElement('div');
+    div.className = 'project-item' + (state.activeProjectFilter === p.id ? ' active' : '');
+    div.innerHTML = `<span>${p.clientName}</span><button class="proj-del" data-id="${p.id}" title="삭제">✕</button>`;
+    div.addEventListener('click', (e) => {
+      if (e.target.classList.contains('proj-del')) return;
+      state.activeProjectFilter = (state.activeProjectFilter === p.id) ? null : p.id;
+      render();
+    });
+    div.querySelector('.proj-del').addEventListener('click', () => {
+      if (!confirm(`"${p.clientName}" 프로젝트를 삭제할까요? 관련 Todo도 모두 삭제됩니다.`)) return;
+      state.projects = state.projects.filter(x => x.id !== p.id);
+      state.todos = state.todos.filter(x => x.projectId !== p.id);
+      state.weekAssignments = state.weekAssignments.filter(x => x.projectId !== p.id);
+      if (state.activeProjectFilter === p.id) state.activeProjectFilter = null;
+      scheduleSave(); render();
+    });
+    el.appendChild(div);
+  });
+
+  const addBtn = document.createElement('button');
+  addBtn.className = 'add-btn';
+  addBtn.textContent = '+ 프로젝트 추가';
+  addBtn.addEventListener('click', () => openModal('modal-project'));
+  el.appendChild(addBtn);
+}
+
+// ============================================================
+// 렌더링 — 패널 2
+// ============================================================
+function renderTodos() {
+  const el = document.getElementById('todo-list');
+  el.innerHTML = '';
+
+  const filteredProjects = state.activeProjectFilter
+    ? state.projects.filter(p => p.id === state.activeProjectFilter)
+    : state.projects;
+
+  filteredProjects.forEach(p => {
+    const todos = state.todos
+      .filter(t => t.projectId === p.id)
+      .sort((a,b) => (a.order||0) - (b.order||0));
+    if (todos.length === 0 && !state.activeProjectFilter) return;
+
+    const group = document.createElement('div');
+    group.className = 'todo-group';
+    group.innerHTML = `<div class="todo-group-label">${p.clientName}</div>`;
+
+    todos.forEach(t => {
+      const item = document.createElement('div');
+      item.className = 'todo-item' + (!t.startDate ? ' unscheduled' : '') + (t.done ? ' done-item' : '');
+      item.draggable = true;
+      item.dataset.id = t.id;
+      item.innerHTML = `
+        <input type="checkbox" ${t.done ? 'checked' : ''}>
+        <span class="todo-title">${t.title}</span>
+        <button class="todo-del" title="삭제">✕</button>
+      `;
+      item.querySelector('input').addEventListener('change', (e) => {
+        t.done = e.target.checked;
+        scheduleSave(); render();
+      });
+      item.querySelector('.todo-del').addEventListener('click', () => {
+        state.todos = state.todos.filter(x => x.id !== t.id);
+        scheduleSave(); render();
+      });
+      item.addEventListener('dragstart', (e) => {
+        state.draggingTodoId = t.id;
+        e.dataTransfer.effectAllowed = 'move';
+      });
+      item.addEventListener('dragend', () => { state.draggingTodoId = null; });
+      group.appendChild(item);
+    });
+
+    el.appendChild(group);
+  });
+
+  // Todo 추가 폼
+  const form = document.createElement('div');
+  form.className = 'add-todo-form';
+  const sel = document.createElement('select');
+  sel.id = 'inline-todo-project';
+  state.projects.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p.id; opt.textContent = p.clientName;
+    sel.appendChild(opt);
+  });
+  if (state.activeProjectFilter) sel.value = state.activeProjectFilter;
+
+  const inp = document.createElement('input');
+  inp.type = 'text'; inp.placeholder = '업무 내용 입력 후 Enter';
+  inp.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && inp.value.trim()) {
+      addTodo(sel.value, inp.value.trim());
+      inp.value = '';
+    }
+  });
+
+  const btn = document.createElement('button');
+  btn.textContent = '+ Todo 추가';
+  btn.addEventListener('click', () => {
+    if (inp.value.trim()) { addTodo(sel.value, inp.value.trim()); inp.value = ''; }
+    else inp.focus();
+  });
+
+  if (state.projects.length > 0) {
+    form.appendChild(sel);
+    form.appendChild(inp);
+    form.appendChild(btn);
+    el.appendChild(form);
+  } else {
+    const msg = document.createElement('p');
+    msg.style.cssText = 'font-size:0.8rem; color:var(--text-muted); padding:8px 0;';
+    msg.textContent = '먼저 프로젝트를 추가해주세요.';
+    el.appendChild(msg);
+  }
+}
+
+function addTodo(projectId, title) {
+  if (!projectId) return;
+  const maxOrder = state.todos.filter(t => t.projectId === projectId).reduce((m,t) => Math.max(m, t.order||0), -1);
+  state.todos.push({ id: uuid(), projectId, title, startDate: null, endDate: null, done: false, order: maxOrder+1 });
+  scheduleSave(); render();
+}
+
+// ============================================================
+// 렌더링 — 패널 3: 월간 캘린더
+// ============================================================
+function renderCalendar() {
+  const el = document.getElementById('calendar-body');
+  el.innerHTML = '';
+
+  const y = state.currentYear;
+  const m = state.currentMonth;
+  document.getElementById('month-label').textContent = `${y}년 ${m+1}월`;
+
+  // 요일 헤더
+  const hdr = document.createElement('div');
+  hdr.className = 'cal-header';
+  ['일','월','화','수','목','금','토'].forEach(d => {
+    const c = document.createElement('div');
+    c.className = 'cal-header-cell';
+    c.textContent = d;
+    hdr.appendChild(c);
+  });
+  el.appendChild(hdr);
+
+  // 첫날 ~ 마지막날
+  const firstDay = new Date(y, m, 1);
+  const lastDay  = new Date(y, m+1, 0);
+  const startDow = firstDay.getDay(); // 0=Sun
+  const todayStr = toISO(new Date());
+
+  // 캘린더 시작일 (이전 달 채우기)
+  const calStart = new Date(y, m, 1 - startDow);
+
+  // 총 주 수
+  const totalDays = startDow + lastDay.getDate();
+  const totalWeeks = Math.ceil(totalDays / 7);
+
+  for (let w = 0; w < totalWeeks; w++) {
+    const weekRow = document.createElement('div');
+    weekRow.className = 'week-row';
+
+    const weekSunday = new Date(calStart);
+    weekSunday.setDate(calStart.getDate() + w * 7);
+    const weekSundayStr = toISO(weekSunday);
+
+    // 이 주의 날짜 배열
+    const weekDates = [];
+    for (let d = 0; d < 7; d++) {
+      const dt = new Date(weekSunday);
+      dt.setDate(weekSunday.getDate() + d);
+      weekDates.push(toISO(dt));
+    }
+
+    // 주간 assign 블록이 있는 클라이언트 (이 주에)
+    const weekMon = weekDates[1]; // 월요일
+    const weekFri = weekDates[5]; // 금요일
+    const assignsThisWeek = state.weekAssignments
+      .filter(a => {
+        // weekStart가 이 주 내 날짜인지
+        return a.weekStart >= weekSundayStr && a.weekStart <= weekDates[6];
+      })
+      .sort((a,b) => (a.order||0)-(b.order||0));
+
+    // 날짜 그리드
+    const grid = document.createElement('div');
+    grid.className = 'day-grid';
+
+    weekDates.forEach((ds, di) => {
+      const cell = document.createElement('div');
+      cell.className = 'day-cell';
+      if (ds < dateStr(y,m,1) || ds > dateStr(y,m,lastDay.getDate())) cell.classList.add('other-month');
+      if (ds === todayStr) cell.classList.add('today');
+      if (di === 0) cell.classList.add('sunday');
+      if (di === 6) cell.classList.add('saturday');
+      cell.dataset.date = ds;
+
+      // 날짜 숫자
+      const dayNum = document.createElement('div');
+      dayNum.className = 'day-num';
+      dayNum.textContent = parseDate(ds).getDate();
+      cell.appendChild(dayNum);
+
+      // 클라이언트 주간 assign 블록 (평일에만)
+      if (di >= 1 && di <= 5) {
+        assignsThisWeek.forEach(a => {
+          const proj = state.projects.find(p => p.id === a.projectId);
+          if (!proj) return;
+          const ab = document.createElement('div');
+          ab.className = 'assign-block';
+          ab.innerHTML = `<span>${proj.clientName}</span><button class="del-assign" data-aid="${a.id}" title="삭제">✕</button>`;
+          ab.querySelector('.del-assign').addEventListener('click', (e) => {
+            e.stopPropagation();
+            state.weekAssignments = state.weekAssignments.filter(x => x.id !== a.id);
+            scheduleSave(); render();
+          });
+          cell.appendChild(ab);
+        });
+      }
+
+      // Todo 블록
+      const todosForDay = state.todos
+        .filter(t => t.startDate && isBetween(ds, t.startDate, t.endDate || t.startDate))
+        .sort((a,b) => {
+          const pa = state.projects.findIndex(p => p.id === a.projectId);
+          const pb = state.projects.findIndex(p => p.id === b.projectId);
+          if (pa !== pb) return pa - pb;
+          return (a.order||0) - (b.order||0);
+        });
+
+      todosForDay.forEach(t => {
+        const proj = state.projects.find(p => p.id === t.projectId);
+        const block = document.createElement('div');
+        block.className = 'cal-todo-block' + (t.done ? ' done-block' : '');
+        block.innerHTML = `
+          <input type="checkbox" ${t.done ? 'checked' : ''} title="완료 처리">
+          <span class="cal-todo-title" title="${t.title}">${t.title}</span>
+          <button class="cal-todo-del" title="일정에서 제거">✕</button>
+        `;
+        if (proj) block.title = `[${proj.clientName}] ${t.title}`;
+        block.querySelector('input').addEventListener('change', (e) => {
+          t.done = e.target.checked;
+          scheduleSave(); render();
+        });
+        block.querySelector('.cal-todo-del').addEventListener('click', () => {
+          t.startDate = null; t.endDate = null;
+          scheduleSave(); render();
+        });
+        cell.appendChild(block);
+      });
+
+      // 드롭 영역
+      cell.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        cell.classList.add('drop-hover');
+      });
+      cell.addEventListener('dragleave', () => cell.classList.remove('drop-hover'));
+      cell.addEventListener('drop', (e) => {
+        e.preventDefault();
+        cell.classList.remove('drop-hover');
+        if (!state.draggingTodoId) return;
+        const todo = state.todos.find(t => t.id === state.draggingTodoId);
+        if (todo) {
+          todo.startDate = ds;
+          todo.endDate   = ds;
+          scheduleSave(); render();
+        }
+        state.draggingTodoId = null;
+      });
+
+      grid.appendChild(cell);
+    });
+
+    weekRow.appendChild(grid);
+
+    // 주차 확장 버튼
+    const expandBtn = document.createElement('button');
+    expandBtn.className = 'week-expand-btn';
+    const isExpanded = state.expandedWeeks.has(weekSundayStr);
+    expandBtn.textContent = isExpanded
+      ? `${w+1}주차 접기 ▲`
+      : `${w+1}주차 자세히 보기 ▼`;
+    expandBtn.addEventListener('click', () => {
+      if (state.expandedWeeks.has(weekSundayStr)) {
+        state.expandedWeeks.delete(weekSundayStr);
+      } else {
+        state.expandedWeeks.add(weekSundayStr);
+      }
+      render();
+    });
+    weekRow.appendChild(expandBtn);
+
+    // 주차 확장 뷰
+    if (isExpanded) {
+      const detail = document.createElement('div');
+      detail.className = 'week-detail';
+
+      const dh = document.createElement('div');
+      dh.className = 'week-detail-header';
+      const labels = ['일','월','화','수','목','금','토'];
+      dh.innerHTML = `<span>${w+1}주차 (${weekDates[0].slice(5)} ~ ${weekDates[6].slice(5)})</span>
+        <button onclick="collapseWeek('${weekSundayStr}')">접기 ▲</button>`;
+      detail.appendChild(dh);
+
+      const dg = document.createElement('div');
+      dg.className = 'week-detail-grid';
+
+      weekDates.forEach((ds, di) => {
+        const dc = document.createElement('div');
+        dc.className = 'week-detail-cell';
+        dc.dataset.date = ds;
+
+        const lbl = document.createElement('div');
+        lbl.className = 'day-label';
+        lbl.textContent = `${labels[di]} ${parseDate(ds).getDate()}일`;
+        if (di === 0) lbl.style.color = '#c0392b';
+        if (di === 6) lbl.style.color = '#2980b9';
+        dc.appendChild(lbl);
+
+        // assign 블록 (평일)
+        if (di >= 1 && di <= 5) {
+          assignsThisWeek.forEach(a => {
+            const proj = state.projects.find(p => p.id === a.projectId);
+            if (!proj) return;
+            const ab = document.createElement('div');
+            ab.className = 'assign-block';
+            ab.innerHTML = `<span>${proj.clientName}</span>`;
+            dc.appendChild(ab);
+          });
+        }
+
+        // Todo 블록
+        const todosForDay = state.todos
+          .filter(t => t.startDate && isBetween(ds, t.startDate, t.endDate || t.startDate))
+          .sort((a,b) => {
+            const pa = state.projects.findIndex(p => p.id === a.projectId);
+            const pb = state.projects.findIndex(p => p.id === b.projectId);
+            if (pa !== pb) return pa - pb;
+            return (a.order||0) - (b.order||0);
+          });
+
+        todosForDay.forEach(t => {
+          const block = document.createElement('div');
+          block.className = 'cal-todo-block' + (t.done ? ' done-block' : '');
+          block.innerHTML = `
+            <input type="checkbox" ${t.done ? 'checked' : ''}>
+            <span class="cal-todo-title" title="${t.title}">${t.title}</span>
+          `;
+          block.querySelector('input').addEventListener('change', (e) => {
+            t.done = e.target.checked;
+            scheduleSave(); render();
+          });
+          dc.appendChild(block);
+        });
+
+        // 드롭 영역
+        dc.addEventListener('dragover', e => { e.preventDefault(); dc.style.background = '#eff6ff'; });
+        dc.addEventListener('dragleave', () => { dc.style.background = ''; });
+        dc.addEventListener('drop', e => {
+          e.preventDefault(); dc.style.background = '';
+          if (!state.draggingTodoId) return;
+          const todo = state.todos.find(t => t.id === state.draggingTodoId);
+          if (todo) { todo.startDate = ds; todo.endDate = ds; scheduleSave(); render(); }
+          state.draggingTodoId = null;
+        });
+
+        dg.appendChild(dc);
+      });
+
+      detail.appendChild(dg);
+      weekRow.appendChild(detail);
+    }
+
+    el.appendChild(weekRow);
+  }
+}
+
+function collapseWeek(weekStr) {
+  state.expandedWeeks.delete(weekStr);
+  render();
+}
+
+// ============================================================
+// 모달
+// ============================================================
+function openModal(id) {
+  document.getElementById(id).classList.add('active');
+}
+function closeModal(id) {
+  document.getElementById(id).classList.remove('active');
+}
+
+// 프로젝트 모달
+document.getElementById('btn-save-project').addEventListener('click', () => {
+  const name = document.getElementById('input-project-name').value.trim();
+  if (!name) return;
+  state.projects.push({ id: uuid(), clientName: name });
+  document.getElementById('input-project-name').value = '';
+  closeModal('modal-project');
+  scheduleSave(); render();
+});
+document.getElementById('input-project-name').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('btn-save-project').click();
+});
+
+// Todo 모달 (상단 add-btn에서 열리는 경우용, 현재는 인라인 폼으로 대체됨)
+document.getElementById('btn-save-todo').addEventListener('click', () => {
+  const pid = document.getElementById('select-todo-project').value;
+  const title = document.getElementById('input-todo-title').value.trim();
+  if (!pid || !title) return;
+  addTodo(pid, title);
+  document.getElementById('input-todo-title').value = '';
+  closeModal('modal-todo');
+});
+
+// 기본 assign 모달
+document.getElementById('btn-add-assign').addEventListener('click', () => {
+  if (state.projects.length === 0) { alert('먼저 프로젝트를 추가해주세요.'); return; }
+
+  // 클라이언트 선택
+  const pSel = document.getElementById('select-assign-project');
+  pSel.innerHTML = '';
+  state.projects.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p.id; opt.textContent = p.clientName;
+    pSel.appendChild(opt);
+  });
+
+  // 주 선택: 현재 월의 주 목록
+  const wSel = document.getElementById('select-assign-week');
+  wSel.innerHTML = '';
+  const y = state.currentYear, m = state.currentMonth;
+  const firstDay = new Date(y, m, 1);
+  const lastDay  = new Date(y, m+1, 0);
+  const startDow = firstDay.getDay();
+  const calStart = new Date(y, m, 1 - startDow);
+  const totalWeeks = Math.ceil((startDow + lastDay.getDate()) / 7);
+  const labels = ['일','월','화','수','목','금','토'];
+
+  for (let w = 0; w < totalWeeks; w++) {
+    const weekSun = new Date(calStart);
+    weekSun.setDate(calStart.getDate() + w * 7);
+    const weekSunStr = toISO(weekSun);
+    const weekDates = [];
+    for (let d = 0; d < 7; d++) {
+      const dt = new Date(weekSun); dt.setDate(weekSun.getDate() + d);
+      weekDates.push(toISO(dt));
+    }
+    const opt = document.createElement('option');
+    opt.value = weekSunStr;
+    opt.textContent = `${w+1}주차 (${weekDates[0].slice(5)} ~ ${weekDates[6].slice(5)})`;
+    wSel.appendChild(opt);
+  }
+
+  openModal('modal-assign');
+});
+
+document.getElementById('btn-save-assign').addEventListener('click', () => {
+  const projectId  = document.getElementById('select-assign-project').value;
+  const weekStart  = document.getElementById('select-assign-week').value;
+  if (!projectId || !weekStart) return;
+
+  // 중복 체크
+  const exists = state.weekAssignments.find(a => a.projectId === projectId && a.weekStart === weekStart);
+  if (exists) { alert('이미 배정되어 있습니다.'); return; }
+
+  const maxOrder = state.weekAssignments
+    .filter(a => a.weekStart === weekStart)
+    .reduce((m,a) => Math.max(m, a.order||0), -1);
+  state.weekAssignments.push({ id: uuid(), projectId, weekStart, order: maxOrder+1 });
+  closeModal('modal-assign');
+  scheduleSave(); render();
+});
+
+// 월 이동
+document.getElementById('btn-prev-month').addEventListener('click', () => {
+  if (state.currentMonth === 0) { state.currentMonth = 11; state.currentYear--; }
+  else state.currentMonth--;
+  state.expandedWeeks.clear();
+  render();
+});
+document.getElementById('btn-next-month').addEventListener('click', () => {
+  if (state.currentMonth === 11) { state.currentMonth = 0; state.currentYear++; }
+  else state.currentMonth++;
+  state.expandedWeeks.clear();
+  render();
+});
+
+// 모달 외부 클릭 닫기
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', e => {
+    if (e.target === overlay) overlay.classList.remove('active');
+  });
+});
+
+// ============================================================
+// 전체 렌더
+// ============================================================
+function render() {
+  renderProjects();
+  renderTodos();
+  renderCalendar();
+}
+
+// ============================================================
+// 앱 시작
+// ============================================================
+async function init() {
+  if (!gistToken || !gistId) {
+    showSetup();
+  } else {
+    await loadFromGist();
+    render();
+  }
+}
+
+init();
+</script>
+</body>
+</html>
