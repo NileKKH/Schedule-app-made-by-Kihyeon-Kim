@@ -373,10 +373,10 @@
   /* span overlay 레이어 */
   .span-layer {
     position: absolute;
-    top: 0; left: 0; right: 0; bottom: 0;
+    top: 0; left: 0; right: 0;
     pointer-events: none;
     z-index: 10;
-    overflow: hidden;
+    overflow: visible;
   }
   .span-bar {
     position: absolute;
@@ -955,6 +955,50 @@
   </div>
 </div>
 
+<!-- ===== 모달: Todo 배정 날짜 목록 ===== -->
+<div class="modal-overlay" id="modal-todo-instances">
+  <div class="modal">
+    <h2>배정된 일정</h2>
+    <p id="modal-todo-instances-title" style="font-size:0.85rem;color:var(--text-muted);margin-bottom:12px;"></p>
+    <div id="modal-todo-instances-list" style="display:flex;flex-direction:column;gap:6px;max-height:260px;overflow-y:auto;margin-bottom:16px;"></div>
+    <div class="modal-btns" style="justify-content:space-between;flex-wrap:wrap;gap:8px;">
+      <button class="btn-primary" id="btn-todo-instances-add-date">+ 날짜 지정 배정</button>
+      <button class="btn-secondary" onclick="closeModal('modal-todo-instances')">닫기</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 모달: Todo 날짜 지정 배정 ===== -->
+<div class="modal-overlay" id="modal-assign-date">
+  <div class="modal">
+    <h2>날짜 지정 배정</h2>
+    <label>시작일</label>
+    <input type="date" id="input-assign-date-start">
+    <label>종료일</label>
+    <input type="date" id="input-assign-date-end">
+    <div class="modal-btns">
+      <button class="btn-secondary" onclick="closeModal('modal-assign-date')">취소</button>
+      <button class="btn-primary" id="btn-confirm-assign-date">배정</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 모달: Todo 상세 / 메모 ===== -->
+<div class="modal-overlay" id="modal-todo-detail">
+  <div class="modal">
+    <h2 id="modal-todo-detail-title" style="font-size:1rem;margin-bottom:4px;"></h2>
+    <div id="modal-todo-detail-meta" style="font-size:0.8rem;color:var(--text-muted);margin-bottom:14px;"></div>
+    <label>시간 (선택)</label>
+    <input type="time" id="input-todo-detail-time" style="margin-bottom:10px;">
+    <label>메모 (선택)</label>
+    <textarea id="input-todo-detail-memo" rows="4" style="width:100%;font-family:inherit;font-size:0.85rem;border:1px solid var(--border);border-radius:var(--radius);padding:8px;resize:vertical;"></textarea>
+    <div class="modal-btns">
+      <button class="btn-secondary" onclick="closeModal('modal-todo-detail')">취소</button>
+      <button class="btn-primary" id="btn-save-todo-detail">저장</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== 모달: 프로젝트 배정 수정 ===== -->
 <div class="modal-overlay" id="modal-edit-assign">
   <div class="modal">
@@ -1529,8 +1573,7 @@ function renderCalendar() {
       if (isMobile()) {
         cell.addEventListener('click', () => {
           if (!state.mobileAssigningTodoId) return;
-          assignTodoToDate(state.mobileAssigningTodoId, ds);
-          cancelMobileAssign();
+          assignTodoToDate(state.mobileAssigningTodoId, ds); // 내부에서 cancelMobileAssign 호출
         });
       }
 
@@ -1640,10 +1683,12 @@ function renderCalendar() {
       bar.style.width = `calc(${colSpan} * (100% + 2px) / 7 - 2px)`;
       bar.style.top   = `${topPx}px`;
       const projName = proj ? proj.clientName : '';
+      const hasMemo = !t._recurring && (t.time || t.memo);
       bar.innerHTML = `
         <input type="checkbox" ${t.done ? 'checked' : ''} title="완료 처리">
         ${projName ? `<span style="font-size:0.60rem;font-weight:700;opacity:0.7;flex-shrink:0">[${projName}]</span>` : ''}
         <span class="span-todo-title" title="${t.title}">${t.title}</span>
+        ${hasMemo ? '<span style="font-size:0.58rem;color:#888;flex-shrink:0">💬</span>' : ''}
         ${t._recurring ? '<span style="font-size:0.58rem;color:#888;flex-shrink:0">↺</span>' : `<button class="cal-todo-del" title="일정에서 제거">✕</button>`}
         ${!t._recurring ? `<div class="resize-handle" data-tid="${t.id}">⋮</div>` : ''}
       `;
@@ -1678,9 +1723,31 @@ function renderCalendar() {
           state.resizingTodoId = t.id;
         });
         attachBarCtx(bar, t);
+
+        // PC: 클릭 → 상세 모달, 모바일: 롱프레스 → 상세 모달
+        if (!isMobile()) {
+          bar.addEventListener('click', (e) => {
+            if (e.target.tagName === 'INPUT' || e.target.classList.contains('cal-todo-del') || e.target.classList.contains('resize-handle')) return;
+            openTodoDetailModal(t.id);
+          });
+        } else {
+          let pressTimer;
+          bar.addEventListener('touchstart', () => {
+            pressTimer = setTimeout(() => openTodoDetailModal(t.id), 600);
+          }, { passive: true });
+          bar.addEventListener('touchend', () => clearTimeout(pressTimer));
+          bar.addEventListener('touchmove', () => clearTimeout(pressTimer));
+        }
       }
       spanLayer.appendChild(bar);
     });
+
+    // week-row 높이 동적 확장: 블록이 넘칠 경우 min-height를 늘려 빈 공간 1개 이상 확보
+    const maxLane = Math.max(...colNextLane);
+    const maxAssign = Math.max(...colAssignCount);
+    const neededH = DAY_NUM_H + (maxAssign + maxLane + 1) * (BAR_H + BAR_GAP);
+    const baseMinH = isMobile() ? 120 : 80;
+    weekRow.style.minHeight = Math.max(baseMinH, neededH) + 'px';
 
     weekRow.appendChild(spanLayer);
     el.appendChild(weekRow);
@@ -1885,21 +1952,6 @@ function cancelMobileAssign() {
   if (chip) chip.style.display = 'none';
 }
 
-function assignTodoToDate(todoId, ds) {
-  const todo = state.todos.find(t => t.id === todoId);
-  if (!todo) return;
-  if (todo.startDate) {
-    const originId = todo.parentId || todo.id;
-    state.todos.push({ id: uuid(), projectId: todo.projectId, title: todo.title,
-      parentId: originId, startDate: ds, endDate: ds, done: false, order: todo.order });
-  } else {
-    todo.startDate = ds;
-    todo.endDate = ds;
-  }
-  scheduleSave();
-  render();
-}
-
 function applyMobileSetup() {
   if (!isMobile()) return;
   switchMobileTab(3);
@@ -2001,8 +2053,10 @@ function attachTodoCtx(el, t) {
   el.addEventListener('contextmenu', e => {
     e.stopPropagation();
     const items = [];
+    items.push({ label: '📋 배정 일정 보기', action: () => openTodoInstancesModal(t.id) });
+    items.push({ label: '📅 날짜 지정 배정', action: () => openAssignDateModal(t.id) });
     if (isMobile()) {
-      items.push({ label: '📅 일정에 배정', action: () => startMobileAssign(t.id) });
+      items.push({ label: '📅 캘린더에서 날짜 선택', action: () => startMobileAssign(t.id) });
     }
     items.push({ label: '수정', action: () => openEditTodoModal(t.id) });
     items.push({ label: '삭제', danger: true, action: () => {
@@ -2011,6 +2065,99 @@ function attachTodoCtx(el, t) {
     }});
     showCtxMenu(e, items);
   });
+}
+
+// ============================================================
+// 배정 날짜 목록 모달
+// ============================================================
+function openTodoInstancesModal(todoId) {
+  const origin = state.todos.find(t => t.id === todoId);
+  if (!origin) return;
+  const instances = state.todos.filter(x => x.startDate && (x.id === todoId || x.parentId === todoId));
+
+  document.getElementById('modal-todo-instances-title').textContent = origin.title;
+  const list = document.getElementById('modal-todo-instances-list');
+  list.innerHTML = '';
+
+  if (instances.length === 0) {
+    list.innerHTML = '<p style="font-size:0.82rem;color:var(--text-muted);text-align:center;padding:12px 0;">배정된 일정이 없습니다.</p>';
+  } else {
+    instances.forEach(inst => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:0.83rem;';
+      const dateStr = inst.startDate === inst.endDate
+        ? inst.startDate
+        : `${inst.startDate} ~ ${inst.endDate}`;
+      const timeStr = inst.time ? ` ${inst.time}` : '';
+      const memoStr = inst.memo ? `<span style="color:var(--text-muted);margin-left:4px;font-size:0.75rem;">💬 ${inst.memo}</span>` : '';
+      row.innerHTML = `
+        <span style="flex:1;">📅 ${dateStr}${timeStr}${memoStr}</span>
+        <button data-iid="${inst.id}" class="inst-del-btn" style="background:none;border:none;color:#dc3545;cursor:pointer;font-size:0.9rem;flex-shrink:0;">✕</button>
+      `;
+      row.querySelector('.inst-del-btn').addEventListener('click', () => {
+        const iid = inst.id;
+        if (inst.parentId) {
+          state.todos = state.todos.filter(x => x.id !== iid);
+        } else {
+          const t = state.todos.find(x => x.id === iid);
+          if (t) { t.startDate = null; t.endDate = null; t.time = null; }
+        }
+        scheduleSave(); render();
+        openTodoInstancesModal(todoId);
+      });
+      list.appendChild(row);
+    });
+  }
+
+  const addBtn = document.getElementById('btn-todo-instances-add-date');
+  addBtn.onclick = () => {
+    closeModal('modal-todo-instances');
+    openAssignDateModal(todoId);
+  };
+
+  openModal('modal-todo-instances');
+}
+
+// ============================================================
+// 날짜 지정 배정 모달
+// ============================================================
+let _assignDateTodoId = null;
+
+function openAssignDateModal(todoId) {
+  _assignDateTodoId = todoId;
+  const today = toISO(new Date());
+  document.getElementById('input-assign-date-start').value = today;
+  document.getElementById('input-assign-date-end').value = today;
+  openModal('modal-assign-date');
+}
+
+document.getElementById('btn-confirm-assign-date').addEventListener('click', () => {
+  const start = document.getElementById('input-assign-date-start').value;
+  const end   = document.getElementById('input-assign-date-end').value;
+  if (!start || !end || !_assignDateTodoId) return;
+  if (end < start) { alert('종료일이 시작일보다 빠릅니다.'); return; }
+  assignTodoToDateRange(_assignDateTodoId, start, end);
+  closeModal('modal-assign-date');
+});
+
+function assignTodoToDateRange(todoId, start, end) {
+  const todo = state.todos.find(t => t.id === todoId);
+  if (!todo) return;
+  if (todo.startDate) {
+    const originId = todo.parentId || todo.id;
+    state.todos.push({ id: uuid(), projectId: todo.projectId, title: todo.title,
+      parentId: originId, startDate: start, endDate: end, done: false, order: todo.order });
+  } else {
+    todo.startDate = start;
+    todo.endDate = end;
+  }
+  scheduleSave(); render();
+}
+
+// assignTodoToDate (모바일 단일 날짜용) 업데이트
+function assignTodoToDate(todoId, ds) {
+  assignTodoToDateRange(todoId, ds, ds);
+  cancelMobileAssign();
 }
 
 function openEditTodoModal(tid) {
@@ -2089,6 +2236,7 @@ function attachBarCtx(el, t) {
     e.stopPropagation();
     const originId = t.parentId || t.id;
     showCtxMenu(e, [
+      { label: '🔍 상세 보기 / 메모', action: () => openTodoDetailModal(t.id) },
       { label: '내용 수정', action: () => openEditTodoModal(originId) },
       { label: '일정에서 제거', action: () => {
         if (t.parentId) {
@@ -2104,6 +2252,40 @@ function attachBarCtx(el, t) {
       }},
     ]);
   });
+}
+
+// ============================================================
+// Todo 상세 모달 (시간 + 메모)
+// ============================================================
+function openTodoDetailModal(todoId) {
+  const t = state.todos.find(x => x.id === todoId);
+  if (!t) return;
+  const proj = state.projects.find(p => p.id === t.projectId);
+  const dateStr = t.startDate
+    ? (t.startDate === t.endDate ? t.startDate : `${t.startDate} ~ ${t.endDate}`)
+    : '날짜 미지정';
+
+  document.getElementById('modal-todo-detail-title').textContent = t.title;
+  document.getElementById('modal-todo-detail-meta').innerHTML =
+    `📁 ${proj ? proj.clientName : '(프로젝트 없음)'}&nbsp;&nbsp;|&nbsp;&nbsp;📅 ${dateStr}`;
+  document.getElementById('input-todo-detail-time').value = t.time || '';
+  document.getElementById('input-todo-detail-memo').value = t.memo || '';
+
+  document.getElementById('btn-save-todo-detail').onclick = () => {
+    const time = document.getElementById('input-todo-detail-time').value || null;
+    const memo = document.getElementById('input-todo-detail-memo').value.trim() || null;
+    // 원본 + 복사본 모두 동기화
+    const originId = t.parentId || t.id;
+    state.todos.forEach(x => {
+      if (x.id === originId || x.parentId === originId) {
+        x.time = time;
+        x.memo = memo;
+      }
+    });
+    closeModal('modal-todo-detail');
+    scheduleSave(); render();
+  };
+  openModal('modal-todo-detail');
 }
 
 // ============================================================
