@@ -542,7 +542,7 @@
     background: #fff;
     border-radius: 12px;
     padding: 32px 36px;
-    width: 440px;
+    width: 480px;
     max-width: 95vw;
     box-shadow: 0 12px 40px rgba(0,0,0,0.25);
   }
@@ -573,6 +573,26 @@
   #btn-create-gist:hover { background: #218838; }
   #btn-setup-save { background: var(--primary); color: #fff; }
   #btn-setup-save:hover { background: #1e3a5f; }
+
+  /* ===== 모드 선택 카드 ===== */
+  .mode-select-wrap {
+    display: flex; gap: 12px; margin-bottom: 20px;
+  }
+  .mode-card {
+    flex: 1; border: 2px solid var(--border); border-radius: 10px;
+    padding: 16px 14px; cursor: pointer; text-align: center;
+    transition: border-color 0.15s, background 0.15s;
+    user-select: none;
+  }
+  .mode-card:hover { border-color: var(--primary); background: #ebf4ff; }
+  .mode-card.selected { border-color: var(--primary); background: #dbeafe; }
+  .mode-card .mode-icon { font-size: 1.8rem; margin-bottom: 8px; }
+  .mode-card .mode-title { font-size: 0.92rem; font-weight: 700; color: var(--primary); margin-bottom: 4px; }
+  .mode-card .mode-desc { font-size: 0.75rem; color: var(--text-muted); line-height: 1.5; }
+
+  /* Gist 설정 섹션 (모드 선택 후 표시) */
+  #gist-setup-section { display: none; }
+  #gist-setup-section.visible { display: block; }
 
   /* ===== 컨텍스트 메뉴 ===== */
   #ctx-menu {
@@ -828,35 +848,59 @@
 <div id="setup-screen">
   <div class="setup-card">
     <h2>처음 사용 설정</h2>
-    <p class="subtitle">GitHub Gist를 이용해 데이터를 저장합니다. 완전 무료입니다.</p>
+    <p class="subtitle">사용 방식을 선택해주세요.</p>
 
-    <div class="setup-step">
-      <strong>Step 1.</strong> <a href="https://github.com" target="_blank">github.com</a> 에서 계정을 만드세요 (무료)
-    </div>
-    <div class="setup-step">
-      <strong>Step 2.</strong> GitHub 로그인 후 →
-      오른쪽 위 프로필 클릭 → <strong>Settings</strong> →
-      왼쪽 아래 <strong>Developer settings</strong> →
-      <strong>Personal access tokens</strong> → <strong>Tokens (classic)</strong> →
-      <strong>Generate new token (classic)</strong> →
-      Note에 아무 이름 입력 → <strong>gist</strong> 체크 → 하단 <strong>Generate token</strong> 클릭 →
-      나온 토큰(ghp_xxx...)을 복사
-    </div>
-
-    <label>GitHub Personal Access Token</label>
-    <input type="password" id="input-token" placeholder="ghp_xxxxxxxxxxxxxxxx">
-
-    <div id="setup-status"></div>
-
-    <div class="setup-btns">
-      <button id="btn-create-gist">새 Gist 자동 생성 →</button>
-      <button id="btn-setup-save">저장 후 시작</button>
+    <!-- 모드 선택 -->
+    <div class="mode-select-wrap">
+      <div class="mode-card" id="mode-card-local" onclick="selectMode('local')">
+        <div class="mode-icon">💾</div>
+        <div class="mode-title">로컬 전용</div>
+        <div class="mode-desc">이 브라우저에만 저장됩니다.<br>설정 없이 바로 시작 가능.<br>모바일 동기화 불가.</div>
+      </div>
+      <div class="mode-card" id="mode-card-gist" onclick="selectMode('gist')">
+        <div class="mode-icon">☁️</div>
+        <div class="mode-title">모바일 연동 (Gist)</div>
+        <div class="mode-desc">GitHub Gist에 저장됩니다.<br>PC·모바일 어디서나 동기화.<br>GitHub 계정 필요 (무료).</div>
+      </div>
     </div>
 
-    <p style="font-size:0.75rem; color:var(--text-muted); margin-top:12px;">
-      이미 Gist ID가 있으신 경우:
-      <input type="text" id="input-gist-id" placeholder="Gist ID (선택사항)" style="margin-top:4px; font-family:inherit; font-size:0.8rem;">
-    </p>
+    <!-- 로컬 모드 시작 버튼 -->
+    <div id="local-setup-section" style="display:none;">
+      <button id="btn-local-start" style="width:100%;padding:10px;background:var(--primary);color:#fff;border:none;border-radius:var(--radius);font-size:0.95rem;font-weight:700;cursor:pointer;">
+        바로 시작하기 →
+      </button>
+    </div>
+
+    <!-- Gist 모드 설정 -->
+    <div id="gist-setup-section">
+      <div class="setup-step">
+        <strong>Step 1.</strong> <a href="https://github.com" target="_blank">github.com</a> 에서 계정을 만드세요 (무료)
+      </div>
+      <div class="setup-step">
+        <strong>Step 2.</strong> GitHub 로그인 후 →
+        오른쪽 위 프로필 클릭 → <strong>Settings</strong> →
+        왼쪽 아래 <strong>Developer settings</strong> →
+        <strong>Personal access tokens</strong> → <strong>Tokens (classic)</strong> →
+        <strong>Generate new token (classic)</strong> →
+        Note에 아무 이름 입력 → <strong>gist</strong> 체크 → 하단 <strong>Generate token</strong> 클릭 →
+        나온 토큰(ghp_xxx...)을 복사
+      </div>
+
+      <label>GitHub Personal Access Token</label>
+      <input type="password" id="input-token" placeholder="ghp_xxxxxxxxxxxxxxxx">
+
+      <div id="setup-status"></div>
+
+      <div class="setup-btns">
+        <button id="btn-create-gist">새 Gist 자동 생성 →</button>
+        <button id="btn-setup-save">저장 후 시작</button>
+      </div>
+
+      <p style="font-size:0.75rem; color:var(--text-muted); margin-top:12px;">
+        이미 Gist ID가 있으신 경우:
+        <input type="text" id="input-gist-id" placeholder="Gist ID (선택사항)" style="margin-top:4px; font-family:inherit; font-size:0.8rem;">
+      </p>
+    </div>
   </div>
 </div>
 
@@ -1173,6 +1217,7 @@ let state = {
 
 let gistToken = localStorage.getItem('gist_token') || '';
 let gistId    = localStorage.getItem('gist_id')    || '';
+let storageMode = localStorage.getItem('storage_mode') || ''; // 'local' | 'gist' | ''
 let saveTimer = null;
 
 const PROJECT_COLORS = [
@@ -1304,7 +1349,43 @@ async function saveToGist() {
 
 function scheduleSave() {
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(saveToGist, 1200);
+  if (storageMode === 'local') {
+    saveTimer = setTimeout(saveToLocal, 1200);
+  } else {
+    saveTimer = setTimeout(saveToGist, 1200);
+  }
+}
+
+// ============================================================
+// 로컬 저장 (localStorage)
+// ============================================================
+function saveToLocal() {
+  const payload = {
+    projects:        state.projects,
+    weekAssignments: state.weekAssignments,
+    todos:           state.todos,
+    recurringTodos:  state.recurringTodos,
+  };
+  try {
+    localStorage.setItem('schedule_data', JSON.stringify(payload));
+  } catch(e) {
+    console.warn('로컬 저장 실패:', e);
+  }
+}
+
+function loadFromLocal() {
+  try {
+    const raw = localStorage.getItem('schedule_data');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      state.projects        = parsed.projects        || [];
+      state.weekAssignments = parsed.weekAssignments || [];
+      state.todos           = parsed.todos           || [];
+      state.recurringTodos  = parsed.recurringTodos  || [];
+    }
+  } catch(e) {
+    console.warn('로컬 불러오기 실패:', e);
+  }
 }
 
 async function createNewGist(token) {
@@ -1335,6 +1416,21 @@ function hideSetup() {
   document.getElementById('setup-screen').classList.remove('active');
 }
 
+function selectMode(mode) {
+  document.getElementById('mode-card-local').classList.toggle('selected', mode === 'local');
+  document.getElementById('mode-card-gist').classList.toggle('selected', mode === 'gist');
+  document.getElementById('local-setup-section').style.display = mode === 'local' ? 'block' : 'none';
+  document.getElementById('gist-setup-section').style.display  = mode === 'gist'  ? 'block' : 'none';
+}
+
+document.getElementById('btn-local-start').addEventListener('click', () => {
+  storageMode = 'local';
+  localStorage.setItem('storage_mode', 'local');
+  loadFromLocal();
+  hideSetup();
+  render();
+});
+
 document.getElementById('btn-create-gist').addEventListener('click', async () => {
   const token = document.getElementById('input-token').value.trim();
   const statusEl = document.getElementById('setup-status');
@@ -1357,8 +1453,10 @@ document.getElementById('btn-setup-save').addEventListener('click', async () => 
   const statusEl = document.getElementById('setup-status');
   if (!token || !id) { statusEl.textContent = '토큰과 Gist ID가 모두 필요합니다.'; statusEl.className = 'error'; return; }
   gistToken = token; gistId = id;
+  storageMode = 'gist';
   localStorage.setItem('gist_token', token);
   localStorage.setItem('gist_id', id);
+  localStorage.setItem('storage_mode', 'gist');
   statusEl.textContent = '데이터 불러오는 중...'; statusEl.className = '';
   await loadFromGist();
   hideSetup();
@@ -2859,11 +2957,14 @@ initPanelResizer('panel-resizer-23', 'panel2', 'panel3', { minLeft: 80, maxLeft:
 // ============================================================
 async function init() {
   initCalendarStart();
-  if (!gistToken || !gistId) {
-    showSetup();
-  } else {
+  if (storageMode === 'local') {
+    loadFromLocal();
+    render();
+  } else if (storageMode === 'gist' && gistToken && gistId) {
     await loadFromGist();
     render();
+  } else {
+    showSetup();
   }
   applyMobileSetup();
 }
