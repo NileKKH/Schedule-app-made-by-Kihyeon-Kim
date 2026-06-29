@@ -55,7 +55,8 @@
     display: flex; align-items: center; justify-content: center;
   }
   #month-nav button:hover { background: rgba(255,255,255,0.35); }
-  #month-label { font-size: 0.95rem; font-weight: 600; min-width: 90px; text-align: center; }
+  #month-label { font-size: 0.95rem; font-weight: 600; min-width: 120px; text-align: center; }
+  .scroll-hint { font-size: 0.72rem; color: rgba(255,255,255,0.5); margin-left: 4px; }
 
   /* ===== 3패널 레이아웃 ===== */
   #main {
@@ -237,10 +238,10 @@
     border: none; border-radius: var(--radius); cursor: pointer; font-size: 0.82rem;
   }
 
-  /* ===== 패널 3 — 월간 캘린더 ===== */
+  /* ===== 패널 3 — 캘린더 ===== */
   #panel3 { flex: 1; min-width: 200px; border-right: none; }
-  #panel3 .panel-body { padding: 8px 10px; display: flex; flex-direction: column; overflow-y: auto; }
-  #calendar-body { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  #panel3 .panel-body { padding: 8px 10px; display: flex; flex-direction: column; overflow: hidden; }
+  #calendar-body { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 
   /* 주간 assign 버튼 바 */
   #assign-btn-bar {
@@ -296,9 +297,8 @@
   .cal-header-cell:nth-child(6)  { color: #2980b9; }
 
   /* 주 단위 래퍼 */
-  .week-row { margin-bottom: 4px; flex: 1 1 0; display: flex; flex-direction: column; min-height: 60px; position: relative; }
+  .week-row { margin-bottom: 4px; flex: 1 1 0; display: flex; flex-direction: column; min-height: 80px; position: relative; }
   .week-row:last-child { margin-bottom: 0; }
-  .week-row.expanded { flex: 4 1 0; min-height: 200px; }
 
   /* 날짜 셀 그리드 */
   .day-grid {
@@ -335,9 +335,10 @@
   .day-cell.today .day-num {
     background: var(--primary);
     color: #fff;
-    border-radius: 50%;
-    width: 18px; height: 18px;
-    display: flex; align-items: center; justify-content: center;
+    border-radius: 10px;
+    min-width: 18px; height: 18px;
+    padding: 0 3px;
+    display: inline-flex; align-items: center; justify-content: center;
   }
 
   /* 클라이언트 assign 블록 */
@@ -673,6 +674,7 @@
     <button id="btn-prev-month">&#8592;</button>
     <span id="month-label"></span>
     <button id="btn-next-month">&#8594;</button>
+    <span class="scroll-hint">↕ 스크롤로 주 이동</span>
   </div>
 </div>
 
@@ -866,6 +868,7 @@ let state = {
   recurringTodos: [],    // { id, projectId, title, weekdays: [0-6 mon=0], startDate, endDate }
   currentYear: new Date().getFullYear(),
   currentMonth: new Date().getMonth(), // 0-based
+  calendarStartDate: null, // 5주 윈도우 시작일 (ISO, 월요일 기준)
   activeProjectFilter: null,
   draggingTodoId: null,
   draggingFromCalendar: false,
@@ -1242,15 +1245,48 @@ function addTodo(projectId, title) {
 }
 
 // ============================================================
-// 렌더링 — 패널 3: 월간 캘린더
+// 렌더링 — 패널 3: 캘린더 (5주 슬라이딩 윈도우)
 // ============================================================
+
+// 캘린더 윈도우 시작일 초기화: 오늘이 포함된 주의 월요일 기준으로 5주 중 2번째 주로 설정
+function initCalendarStart() {
+  if (state.calendarStartDate) return;
+  const today = toISO(new Date());
+  const d = parseDate(today);
+  const dow = (d.getDay() + 6) % 7; // 0=Mon
+  d.setDate(d.getDate() - dow); // 이번 주 월요일
+  d.setDate(d.getDate() - 7);   // 한 주 앞으로 (오늘 주가 2번째 위치)
+  state.calendarStartDate = toISO(d);
+}
+
+function shiftCalendar(weeks) {
+  const d = parseDate(state.calendarStartDate);
+  d.setDate(d.getDate() + weeks * 7);
+  state.calendarStartDate = toISO(d);
+  renderCalendar(); // 캘린더만 갱신 (패널1,2는 유지)
+}
+
+function getCalendarLabel() {
+  const start = parseDate(state.calendarStartDate);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 34); // 5주 마지막날
+  const sy = start.getFullYear(), sm = start.getMonth() + 1;
+  const ey = end.getFullYear(), em = end.getMonth() + 1;
+  if (sy === ey && sm === em) return `${sy}년 ${sm}월`;
+  if (sy === ey) return `${sy}년 ${sm}월 ~ ${em}월`;
+  return `${sy}년 ${sm}월 ~ ${ey}년 ${em}월`;
+}
+
 function renderCalendar() {
+  initCalendarStart();
+
   const el = document.getElementById('calendar-body');
   el.innerHTML = '';
 
-  const y = state.currentYear;
-  const m = state.currentMonth;
-  document.getElementById('month-label').textContent = `${y}년 ${m+1}월`;
+  document.getElementById('month-label').textContent = getCalendarLabel();
+
+  const todayStr = toISO(new Date());
+  const WEEKS = 5;
 
   // 요일 헤더
   const hdr = document.createElement('div');
@@ -1263,42 +1299,33 @@ function renderCalendar() {
   });
   el.appendChild(hdr);
 
-  // 첫날 ~ 마지막날
-  const firstDay = new Date(y, m, 1);
-  const lastDay  = new Date(y, m+1, 0);
-  const startDow = (firstDay.getDay() + 6) % 7; // 0=Mon, 6=Sun
-  const todayStr = toISO(new Date());
+  const DAY_NUM_H = 24;
+  const BAR_H = 20;
+  const BAR_GAP = 2;
 
-  // 캘린더 시작일 (이전 달 채우기, 월요일 기준)
-  const calStart = new Date(y, m, 1 - startDow);
+  for (let w = 0; w < WEEKS; w++) {
+    const weekStart = parseDate(state.calendarStartDate);
+    weekStart.setDate(weekStart.getDate() + w * 7);
 
-  // 총 주 수
-  const totalDays = startDow + lastDay.getDate();
-  const totalWeeks = Math.ceil(totalDays / 7);
-
-  for (let w = 0; w < totalWeeks; w++) {
-    const weekRow = document.createElement('div');
-    weekRow.className = 'week-row';
-
-    const weekSunday = new Date(calStart);
-    weekSunday.setDate(calStart.getDate() + w * 7);
-    const weekSundayStr = toISO(weekSunday);
-
-    // 이 주의 날짜 배열
+    // 이 주의 날짜 배열 (월~일)
     const weekDates = [];
     for (let d = 0; d < 7; d++) {
-      const dt = new Date(weekSunday);
-      dt.setDate(weekSunday.getDate() + d);
+      const dt = new Date(weekStart);
+      dt.setDate(weekStart.getDate() + d);
       weekDates.push(toISO(dt));
     }
 
-    // 이 주의 평일 범위
-    const weekMon = weekDates[0]; // 월요일 (di=0)
-    const weekFri = weekDates[4]; // 금요일 (di=4)
-    // 이 주에 걸치는 배정 (평일 기준)
+    const weekMon = weekDates[0];
+    const weekSun = weekDates[6];
+    const weekFri = weekDates[4];
+
+    // 이 주에 걸치는 assign 배정 (평일 기준)
     const assignsThisWeek = state.weekAssignments
       .filter(a => a.startDate && a.endDate && a.startDate <= weekFri && a.endDate >= weekMon)
       .sort((a,b) => (a.order||0)-(b.order||0));
+
+    const weekRow = document.createElement('div');
+    weekRow.className = 'week-row';
 
     // 날짜 그리드
     const grid = document.createElement('div');
@@ -1307,19 +1334,19 @@ function renderCalendar() {
     weekDates.forEach((ds, di) => {
       const cell = document.createElement('div');
       cell.className = 'day-cell';
-      if (ds < dateStr(y,m,1) || ds > dateStr(y,m,lastDay.getDate())) cell.classList.add('other-month');
+      const dObj = parseDate(ds);
       if (ds === todayStr) cell.classList.add('today');
       if (di === 6) cell.classList.add('sunday');
       if (di === 5) cell.classList.add('saturday');
       cell.dataset.date = ds;
 
-      // 날짜 숫자
       const dayNum = document.createElement('div');
       dayNum.className = 'day-num';
-      dayNum.textContent = parseDate(ds).getDate();
+      const dateNum = dObj.getDate();
+      dayNum.textContent = dateNum === 1 ? `${dObj.getMonth()+1}/${dateNum}` : dateNum;
+      if (dateNum === 1) dayNum.style.fontWeight = '800';
       cell.appendChild(dayNum);
 
-      // 드롭 영역
       cell.addEventListener('dragover', (e) => {
         e.preventDefault();
         cell.classList.add('drop-hover');
@@ -1333,19 +1360,16 @@ function renderCalendar() {
         if (todo) {
           if (state.draggingFromCalendar) {
             if (state.ctrlDragging) {
-              // Ctrl+드래그: 복사 인스턴스 생성
               const originId = todo.parentId || todo.id;
               const duration = todo.endDate ? Math.round((parseDate(todo.endDate) - parseDate(todo.startDate)) / 86400000) : 0;
               const copy = { id: uuid(), projectId: todo.projectId, title: todo.title, parentId: originId, startDate: ds, endDate: addDays(ds, duration), done: false, order: todo.order };
               state.todos.push(copy);
             } else {
-              // 일반 이동
               const duration = todo.endDate ? Math.round((parseDate(todo.endDate) - parseDate(todo.startDate)) / 86400000) : 0;
               todo.startDate = ds;
               todo.endDate = addDays(ds, duration);
             }
           } else {
-            // 패널 2 → 캘린더: 원본에 이미 startDate가 있으면 새 복사본 생성, 없으면 원본에 배정
             const originId = todo.parentId || todo.id;
             const alreadyScheduled = todo.startDate;
             if (alreadyScheduled) {
@@ -1362,21 +1386,14 @@ function renderCalendar() {
         state.draggingFromCalendar = false;
         state.ctrlDragging = false;
       });
-      // 리사이즈 mouseover
       cell.addEventListener('mouseover', () => {
         if (state.resizingTodoId) {
           const todo = state.todos.find(t => t.id === state.resizingTodoId);
-          if (todo && ds >= todo.startDate) {
-            todo.endDate = ds;
-            render();
-          }
+          if (todo && ds >= todo.startDate) { todo.endDate = ds; render(); }
         }
         if (state.resizingAssignId) {
           const assign = state.weekAssignments.find(a => a.id === state.resizingAssignId);
-          if (assign && ds >= assign.startDate) {
-            assign.endDate = ds;
-            render();
-          }
+          if (assign && ds >= assign.startDate) { assign.endDate = ds; render(); }
         }
       });
 
@@ -1385,34 +1402,37 @@ function renderCalendar() {
 
     weekRow.appendChild(grid);
 
-    // ── span overlay (assign + todo bars) ──────────────────────
-    // CSS calc 위치 계산: 7열, gap=2px
-    // col i의 left = calc(i * (100% + 2px) / 7)
-    // n열 span의 width = calc(n * (100% + 2px) / 7 - 2px)
-    // top 기준: 날짜숫자 영역 = 24px, 블록높이 = 20px, 블록간격 = 2px
+    // ── span overlay ──────────────────────────────────────────
     const spanLayer = document.createElement('div');
     spanLayer.className = 'span-layer';
 
-    const weekdays = [weekDates[0],weekDates[1],weekDates[2],weekDates[3],weekDates[4]];
-    const DAY_NUM_H = 24;
-    const BAR_H = 20;
-    const BAR_GAP = 2;
+    // assign 바: 각 assign이 이 주에서 차지하는 열 범위 계산
+    // 열별로 최대 assign 수를 추적하여 todo의 top offset을 동적으로 계산
+    // col별 assign 점유 배열 (7열)
+    const colAssignCount = new Array(7).fill(0);
 
-    // assign 바
     assignsThisWeek.forEach((a, ai) => {
       const proj = state.projects.find(p => p.id === a.projectId);
       if (!proj) return;
-      const firstCol = weekdays.findIndex(d => d >= a.startDate && d <= a.endDate);
+      // 이 주에서 assign이 차지하는 열 범위 (평일 0~4만)
+      const firstCol = weekDates.findIndex(d => d >= a.startDate && d <= a.endDate);
       if (firstCol < 0) return;
-      const lastCol  = weekdays.reduce((acc, d, i) => (d >= a.startDate && d <= a.endDate ? i : acc), firstCol);
-      const colSpan  = lastCol - firstCol + 1;
+      const lastCol = weekDates.reduce((acc, d, i) => (d >= a.startDate && d <= a.endDate ? i : acc), firstCol);
+      const colSpan = lastCol - firstCol + 1;
+
+      // 이 assign의 row = ai (순서 기반)
+      const rowIdx = ai;
+      for (let c = firstCol; c <= lastCol; c++) {
+        colAssignCount[c] = Math.max(colAssignCount[c], rowIdx + 1);
+      }
+
       const rangeLabel = `${a.startDate.slice(5)} ~ ${a.endDate.slice(5)}`;
       const bar = document.createElement('div');
       bar.className = 'span-bar assign-bar';
       bar.style.left  = `calc(${firstCol} * (100% + 2px) / 7)`;
       bar.style.width = `calc(${colSpan} * (100% + 2px) / 7 - 2px)`;
-      bar.style.top   = `${DAY_NUM_H + ai * (BAR_H + BAR_GAP)}px`;
-      bar.innerHTML = `<span style="flex:1;word-break:break-word">${proj.clientName} <small style="font-weight:400;opacity:0.7">${rangeLabel}</small></span><button class="del-assign" title="삭제">✕</button><div class="assign-resize-handle" data-aid="${a.id}">⋮</div>`;
+      bar.style.top   = `${DAY_NUM_H + rowIdx * (BAR_H + BAR_GAP)}px`;
+      bar.innerHTML = `<span style="flex:1;overflow:hidden;text-overflow:ellipsis">${proj.clientName} <small style="font-weight:400;opacity:0.7">${rangeLabel}</small></span><button class="del-assign" title="삭제">✕</button><div class="assign-resize-handle" data-aid="${a.id}">⋮</div>`;
       bar.querySelector('.del-assign').addEventListener('click', (e) => {
         e.stopPropagation();
         state.weekAssignments = state.weekAssignments.filter(x => x.id !== a.id);
@@ -1426,32 +1446,36 @@ function renderCalendar() {
       spanLayer.appendChild(bar);
     });
 
-    // todo 바 (일반 + 반복일정)
+    // todo 바: 각 todo 바가 차지하는 열 범위의 실제 assign 수를 기준으로 top 계산
     const recurringThisWeek = [];
     weekDates.forEach(ds => {
       getRecurringForDate(ds).forEach(r => recurringThisWeek.push(r));
     });
     const todosThisWeek = [
-      ...state.todos.filter(t => t.startDate && t.startDate <= weekDates[6] && (t.endDate || t.startDate) >= weekDates[0]),
+      ...state.todos.filter(t => t.startDate && t.startDate <= weekSun && (t.endDate || t.startDate) >= weekMon),
       ...recurringThisWeek,
     ].sort((a,b) => {
-        const pa = state.projects.findIndex(p => p.id === a.projectId);
-        const pb = state.projects.findIndex(p => p.id === b.projectId);
-        if (pa !== pb) return pa - pb;
-        return (a.order||0) - (b.order||0);
-      });
+      const pa = state.projects.findIndex(p => p.id === a.projectId);
+      const pb = state.projects.findIndex(p => p.id === b.projectId);
+      if (pa !== pb) return pa - pb;
+      return (a.order||0) - (b.order||0);
+    });
 
-    const assignBarCount = assignsThisWeek.length;
     todosThisWeek.forEach((t, ti) => {
       const color = getProjectColor(t.projectId);
       const proj  = state.projects.find(p => p.id === t.projectId);
-      // 이 주에서 시작/끝 col 계산 (0~6, 토일 포함)
       const tEnd = t.endDate || t.startDate;
       const firstCol = weekDates.findIndex(d => d >= t.startDate && d <= tEnd);
       if (firstCol < 0) return;
-      const lastCol  = weekDates.reduce((acc, d, i) => (d >= t.startDate && d <= tEnd ? i : acc), firstCol);
-      const colSpan  = lastCol - firstCol + 1;
-      const topPx = DAY_NUM_H + assignBarCount * (BAR_H + BAR_GAP) + ti * (BAR_H + BAR_GAP);
+      const lastCol = weekDates.reduce((acc, d, i) => (d >= t.startDate && d <= tEnd ? i : acc), firstCol);
+      const colSpan = lastCol - firstCol + 1;
+
+      // 이 todo 바가 차지하는 열 범위에서 최대 assign 수 → 해당 열들의 실제 공백만큼 offset
+      let maxAssignInRange = 0;
+      for (let c = firstCol; c <= lastCol; c++) {
+        maxAssignInRange = Math.max(maxAssignInRange, colAssignCount[c]);
+      }
+      const topPx = DAY_NUM_H + maxAssignInRange * (BAR_H + BAR_GAP) + ti * (BAR_H + BAR_GAP);
 
       const bar = document.createElement('div');
       bar.className = 'span-bar todo-bar' + (t.done ? ' done-block' : '');
@@ -1506,7 +1530,6 @@ function renderCalendar() {
     });
 
     weekRow.appendChild(spanLayer);
-
     el.appendChild(weekRow);
   }
 }
@@ -1664,17 +1687,22 @@ document.getElementById('btn-confirm-recurring-del').addEventListener('click', (
   scheduleSave(); render();
 });
 
-// 월 이동
+// 주 이동 (헤더 화살표: 4주씩, 스크롤: 1주씩)
 document.getElementById('btn-prev-month').addEventListener('click', () => {
-  if (state.currentMonth === 0) { state.currentMonth = 11; state.currentYear--; }
-  else state.currentMonth--;
-  render();
+  shiftCalendar(-4);
 });
 document.getElementById('btn-next-month').addEventListener('click', () => {
-  if (state.currentMonth === 11) { state.currentMonth = 0; state.currentYear++; }
-  else state.currentMonth++;
-  render();
+  shiftCalendar(4);
 });
+
+// 패널3 스크롤 → 1주 이동
+let wheelThrottle = false;
+document.getElementById('panel3').addEventListener('wheel', (e) => {
+  if (wheelThrottle) return;
+  wheelThrottle = true;
+  setTimeout(() => { wheelThrottle = false; }, 150);
+  shiftCalendar(e.deltaY > 0 ? 1 : -1);
+}, { passive: true });
 
 document.getElementById('btn-add-recurring').addEventListener('click', () => openRecurringModal());
 document.getElementById('btn-del-recurring').addEventListener('click', () => openRecurringDelModal());
@@ -1973,6 +2001,7 @@ function enableTodoDragSort(groupEl, projectId) {
 // 앱 시작
 // ============================================================
 async function init() {
+  initCalendarStart();
   if (!gistToken || !gistId) {
     showSetup();
   } else {
