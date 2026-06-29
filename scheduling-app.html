@@ -598,14 +598,57 @@
   .ctx-item.danger:hover { background: #fff0f0; }
 
   /* ===== 패널 리사이저 ===== */
-  #panel-resizer {
+  .panel-resizer {
     width: 5px;
     background: var(--border);
     cursor: col-resize;
     flex-shrink: 0;
     transition: background 0.15s;
   }
-  #panel-resizer:hover, #panel-resizer.dragging { background: var(--primary); }
+  .panel-resizer:hover, .panel-resizer.dragging { background: var(--primary); }
+
+  /* ===== 중요도 배지 ===== */
+  .priority-badge {
+    font-size: 0.62rem;
+    font-weight: 700;
+    border-radius: 3px;
+    padding: 0 4px;
+    flex-shrink: 0;
+    line-height: 1.5;
+  }
+  .priority-high   { background: #ffe0e0; color: #c0392b; }
+  .priority-mid    { background: #fff3cd; color: #e65100; }
+  .priority-low    { background: #e8f5e9; color: #2e7d32; }
+  .priority-none   { background: #ebebeb; color: #888;    }
+
+  /* ===== Todo 뷰 전환 버튼 ===== */
+  #todo-view-toggle {
+    display: flex;
+    gap: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .todo-view-btn {
+    flex: 1;
+    font-size: 0.72rem;
+    padding: 4px 6px;
+    background: #fff;
+    color: var(--text-muted);
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.15s, color 0.15s;
+    white-space: nowrap;
+  }
+  .todo-view-btn.active {
+    background: var(--primary);
+    color: #fff;
+  }
+  .todo-view-btn:not(:last-child) {
+    border-right: 1px solid var(--border);
+  }
 
   /* ===== 스크롤바 ===== */
   ::-webkit-scrollbar { width: 5px; height: 5px; }
@@ -666,7 +709,7 @@
 
     /* 메인: 패널 절대 배치 */
     #main { flex-direction: column; position: relative; overflow: hidden; }
-    #panel-resizer { display: none; }
+    .panel-resizer { display: none; }
 
     .panel {
       width: 100% !important;
@@ -842,9 +885,18 @@
     </div>
   </div>
 
+  <!-- 패널 1-2 구분 드래그 핸들 -->
+  <div class="panel-resizer" id="panel-resizer-12"></div>
+
   <!-- 패널 2: Todo 리스트 -->
   <div class="panel" id="panel2">
-    <div class="panel-header">Todo 리스트</div>
+    <div class="panel-header" style="display:flex;align-items:center;gap:6px;padding-right:8px;">
+      <span>Todo 리스트</span>
+      <div id="todo-view-toggle" style="margin-left:auto;">
+        <button class="todo-view-btn active" data-view="project" onclick="setTodoView('project')">프로젝트별</button>
+        <button class="todo-view-btn" data-view="priority" onclick="setTodoView('priority')">중요도별</button>
+      </div>
+    </div>
     <div class="panel-body" id="panel2-body">
       <div id="todo-add-box"></div>
       <div id="todo-scroll"></div>
@@ -852,7 +904,7 @@
   </div>
 
   <!-- 패널 2-3 구분 드래그 핸들 -->
-  <div id="panel-resizer"></div>
+  <div class="panel-resizer" id="panel-resizer-23"></div>
 
   <!-- 패널 3: 월간 캘린더 -->
   <div class="panel" id="panel3">
@@ -893,6 +945,13 @@
     <select id="select-edit-todo-project"></select>
     <label>업무 내용</label>
     <input type="text" id="input-edit-todo-title">
+    <label>중요도</label>
+    <select id="select-edit-todo-priority">
+      <option value="high">상 (높음)</option>
+      <option value="mid">중</option>
+      <option value="low">하 (낮음)</option>
+      <option value="none">미정</option>
+    </select>
     <div class="modal-btns">
       <button class="btn-secondary" onclick="closeModal('modal-edit-todo')">취소</button>
       <button class="btn-primary" id="btn-save-edit-todo">저장</button>
@@ -1037,8 +1096,17 @@
 <!-- ===== 모달: Todo 상세 / 메모 ===== -->
 <div class="modal-overlay" id="modal-todo-detail">
   <div class="modal">
-    <h2 id="modal-todo-detail-title" style="font-size:1rem;margin-bottom:4px;"></h2>
+    <h2 style="font-size:1rem;margin-bottom:4px;">Todo 상세</h2>
     <div id="modal-todo-detail-meta" style="font-size:0.8rem;color:var(--text-muted);margin-bottom:14px;"></div>
+    <label>업무 내용</label>
+    <input type="text" id="input-todo-detail-title" style="margin-bottom:10px;">
+    <label>중요도</label>
+    <select id="select-todo-detail-priority" style="margin-bottom:10px;">
+      <option value="high">상 (높음)</option>
+      <option value="mid">중</option>
+      <option value="low">하 (낮음)</option>
+      <option value="none">미정</option>
+    </select>
     <label>시간 (선택)</label>
     <input type="time" id="input-todo-detail-time" style="margin-bottom:10px;">
     <label>메모 (선택)</label>
@@ -1100,6 +1168,7 @@ let state = {
   resizingAssignId: null,
   mobileWeeks: 3,
   mobileAssigningTodoId: null,
+  todoView: 'project', // 'project' | 'priority'
 };
 
 let gistToken = localStorage.getItem('gist_token') || '';
@@ -1345,6 +1414,73 @@ function renderProjects() {
 // ============================================================
 // 렌더링 — 패널 2
 // ============================================================
+function buildTodoItem(t, color, showProjectLabel) {
+  const instances = state.todos.filter(x => x.startDate && (x.id === t.id || x.parentId === t.id));
+  const instCount = instances.length;
+  const allDone = instCount > 0 && instances.every(x => x.done);
+  const pMeta = PRIORITY_META[t.priority || 'none'];
+
+  const item = document.createElement('div');
+  item.className = 'todo-item' + (allDone ? ' done-item' : '');
+  item.style.borderLeft = `3px solid ${color.border}`;
+  item.draggable = true;
+  item.dataset.id = t.id;
+
+  const needSchedule = !t.startDate && instCount === 0;
+  const projLabel = showProjectLabel
+    ? (() => { const p = state.projects.find(x => x.id === t.projectId); return p ? `<span style="font-size:0.65rem;color:${color.text};background:${color.bg};border-radius:3px;padding:0 4px;flex-shrink:0;">${p.clientName}</span>` : ''; })()
+    : '';
+  item.innerHTML = `
+    ${needSchedule ? '<span class="need-schedule">[일정반영필요]</span>' : ''}
+    <div class="todo-item-row">
+      <input type="checkbox" ${allDone ? 'checked' : ''}>
+      <span class="priority-badge ${pMeta.cls}">${pMeta.label}</span>
+      ${instCount > 0 ? `<span class="todo-count-badge">${instCount}</span>` : ''}
+      ${projLabel}
+      <span class="todo-title">${t.title}</span>
+      <button class="todo-del" title="삭제">✕</button>
+    </div>
+  `;
+
+  item.querySelector('input').addEventListener('change', (e) => {
+    const checked = e.target.checked;
+    state.todos.forEach(x => { if (x.id === t.id || x.parentId === t.id) x.done = checked; });
+    scheduleSave(); render();
+  });
+  item.querySelector('.todo-del').addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    state.todos = state.todos.filter(x => x.id !== t.id && x.parentId !== t.id);
+    scheduleSave(); render();
+  });
+  item.addEventListener('dragend', () => { state.draggingTodoId = null; });
+
+  // 클릭 → 상세 모달 (체크박스·삭제 버튼 제외)
+  item.addEventListener('click', (e) => {
+    if (e.target.tagName === 'INPUT' || e.target.classList.contains('todo-del')) return;
+    openTodoDetailModal(t.id);
+  });
+
+  attachTodoCtx(item, t);
+
+  if (isMobile()) {
+    let pressTimer;
+    item.addEventListener('touchstart', (e) => {
+      pressTimer = setTimeout(() => {
+        navigator.vibrate && navigator.vibrate(40);
+        item.dispatchEvent(new MouseEvent('contextmenu', {
+          bubbles: true, cancelable: true,
+          clientX: e.touches[0].clientX,
+          clientY: e.touches[0].clientY,
+        }));
+      }, 600);
+    }, { passive: true });
+    item.addEventListener('touchend', () => clearTimeout(pressTimer));
+    item.addEventListener('touchmove', () => clearTimeout(pressTimer));
+  }
+
+  return item;
+}
+
 function renderTodos() {
   const el = document.getElementById('todo-scroll');
   el.innerHTML = '';
@@ -1353,85 +1489,68 @@ function renderTodos() {
     ? state.projects.filter(p => p.id === state.activeProjectFilter)
     : state.projects;
 
-  filteredProjects.forEach(p => {
-    const todos = state.todos
-      .filter(t => t.projectId === p.id)
-      .sort((a,b) => (a.order||0) - (b.order||0));
-    if (todos.length === 0 && !state.activeProjectFilter) return;
+  if (state.todoView === 'project') {
+    filteredProjects.forEach(p => {
+      const todos = state.todos
+        .filter(t => t.projectId === p.id && !t.parentId)
+        .sort((a,b) => (a.order||0) - (b.order||0));
+      if (todos.length === 0 && !state.activeProjectFilter) return;
 
-    const color = getProjectColor(p.id);
-    const group = document.createElement('div');
-    group.className = 'todo-group';
-    const lbl = document.createElement('div');
-    lbl.className = 'todo-group-label';
-    lbl.textContent = p.clientName;
-    lbl.style.background = color.bg;
-    lbl.style.color = color.text;
-    lbl.style.borderLeft = `3px solid ${color.border}`;
-    group.appendChild(lbl);
+      const color = getProjectColor(p.id);
+      const group = document.createElement('div');
+      group.className = 'todo-group';
+      const lbl = document.createElement('div');
+      lbl.className = 'todo-group-label';
+      lbl.textContent = p.clientName;
+      lbl.style.background = color.bg;
+      lbl.style.color = color.text;
+      lbl.style.borderLeft = `3px solid ${color.border}`;
+      group.appendChild(lbl);
 
-    // 패널 2에는 원본(parentId 없는) todo만 표시
-    const originTodos = todos.filter(t => !t.parentId);
-    originTodos.forEach(t => {
-      // 패널 3에 배정된 인스턴스 수 (자기 자신 + 복사본)
-      const instances = state.todos.filter(x => x.startDate && (x.id === t.id || x.parentId === t.id));
-      const instCount = instances.length;
-      // 패널 2 체크: 모든 인스턴스가 완료여야 체크
-      const allDone = instCount > 0 && instances.every(x => x.done);
-
-      const item = document.createElement('div');
-      item.className = 'todo-item' + (allDone ? ' done-item' : '');
-      item.style.borderLeft = `3px solid ${color.border}`;
-      item.draggable = true;
-      item.dataset.id = t.id;
-
-      const needSchedule = !t.startDate && instCount === 0;
-      item.innerHTML = `
-        ${needSchedule ? '<span class="need-schedule">[일정반영필요]</span>' : ''}
-        <div class="todo-item-row">
-          <input type="checkbox" ${allDone ? 'checked' : ''}>
-          ${instCount > 0 ? `<span class="todo-count-badge">${instCount}</span>` : ''}
-          <span class="todo-title">${t.title}</span>
-          <button class="todo-del" title="삭제">✕</button>
-        </div>
-      `;
-      item.querySelector('input').addEventListener('change', (e) => {
-        const checked = e.target.checked;
-        // 원본 + 복사본 모두 done 상태 변경
-        state.todos.forEach(x => { if (x.id === t.id || x.parentId === t.id) x.done = checked; });
-        scheduleSave(); render();
+      todos.forEach(t => {
+        group.appendChild(buildTodoItem(t, color, false));
       });
-      item.querySelector('.todo-del').addEventListener('click', () => {
-        // 원본 + 복사본 모두 삭제
-        state.todos = state.todos.filter(x => x.id !== t.id && x.parentId !== t.id);
-        scheduleSave(); render();
-      });
-      item.addEventListener('dragend', () => { state.draggingTodoId = null; });
-      attachTodoCtx(item, t);
-
-      // 모바일: 롱프레스 → 컨텍스트 메뉴 (PC 우클릭과 동일)
-      if (isMobile()) {
-        let pressTimer;
-        item.addEventListener('touchstart', (e) => {
-          pressTimer = setTimeout(() => {
-            navigator.vibrate && navigator.vibrate(40);
-            item.dispatchEvent(new MouseEvent('contextmenu', {
-              bubbles: true, cancelable: true,
-              clientX: e.touches[0].clientX,
-              clientY: e.touches[0].clientY,
-            }));
-          }, 600);
-        }, { passive: true });
-        item.addEventListener('touchend', () => clearTimeout(pressTimer));
-        item.addEventListener('touchmove', () => clearTimeout(pressTimer));
-      }
-
-      group.appendChild(item);
+      enableTodoDragSort(group, p.id);
+      el.appendChild(group);
     });
-    enableTodoDragSort(group, p.id);
+  } else {
+    // 중요도별 그룹
+    const priorityGroups = [
+      { key: 'high', label: '상 (높음)', headerColor: '#c0392b', headerBg: '#ffe0e0' },
+      { key: 'mid',  label: '중',        headerColor: '#e65100', headerBg: '#fff3cd' },
+      { key: 'low',  label: '하 (낮음)', headerColor: '#2e7d32', headerBg: '#e8f5e9' },
+      { key: 'none', label: '미정',      headerColor: '#888',    headerBg: '#ebebeb' },
+    ];
 
-    el.appendChild(group);
-  });
+    const projectIds = new Set(filteredProjects.map(p => p.id));
+    priorityGroups.forEach(pg => {
+      const todos = state.todos
+        .filter(t => !t.parentId && (t.priority || 'none') === pg.key && projectIds.has(t.projectId))
+        .sort((a,b) => {
+          const pa = state.projects.findIndex(p => p.id === a.projectId);
+          const pb = state.projects.findIndex(p => p.id === b.projectId);
+          if (pa !== pb) return pa - pb;
+          return (a.order||0) - (b.order||0);
+        });
+      if (todos.length === 0) return;
+
+      const group = document.createElement('div');
+      group.className = 'todo-group';
+      const lbl = document.createElement('div');
+      lbl.className = 'todo-group-label';
+      lbl.textContent = pg.label;
+      lbl.style.background = pg.headerBg;
+      lbl.style.color = pg.headerColor;
+      lbl.style.borderLeft = `3px solid ${pg.headerColor}`;
+      group.appendChild(lbl);
+
+      todos.forEach(t => {
+        const color = getProjectColor(t.projectId);
+        group.appendChild(buildTodoItem(t, color, true));
+      });
+      el.appendChild(group);
+    });
+  }
 
   // Todo 추가 폼 (상단 고정 영역에 렌더링)
   const addBox = document.getElementById('todo-add-box');
@@ -1439,6 +1558,7 @@ function renderTodos() {
   if (state.projects.length > 0) {
     const form = document.createElement('div');
     form.className = 'add-todo-form';
+
     const sel = document.createElement('select');
     sel.id = 'inline-todo-project';
     state.projects.forEach(p => {
@@ -1448,11 +1568,20 @@ function renderTodos() {
     });
     if (state.activeProjectFilter) sel.value = state.activeProjectFilter;
 
+    const priSel = document.createElement('select');
+    priSel.id = 'inline-todo-priority';
+    [['high','상 (높음)'],['mid','중'],['low','하 (낮음)'],['none','미정']].forEach(([v,l]) => {
+      const opt = document.createElement('option');
+      opt.value = v; opt.textContent = l;
+      priSel.appendChild(opt);
+    });
+    priSel.value = 'none';
+
     const inp = document.createElement('input');
     inp.type = 'text'; inp.placeholder = '업무 내용 입력 후 Enter';
     inp.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && inp.value.trim()) {
-        addTodo(sel.value, inp.value.trim());
+        addTodo(sel.value, inp.value.trim(), priSel.value);
         inp.value = '';
       }
     });
@@ -1460,11 +1589,12 @@ function renderTodos() {
     const btn = document.createElement('button');
     btn.textContent = '+ Todo 추가';
     btn.addEventListener('click', () => {
-      if (inp.value.trim()) { addTodo(sel.value, inp.value.trim()); inp.value = ''; }
+      if (inp.value.trim()) { addTodo(sel.value, inp.value.trim(), priSel.value); inp.value = ''; }
       else inp.focus();
     });
 
     form.appendChild(sel);
+    form.appendChild(priSel);
     form.appendChild(inp);
     form.appendChild(btn);
     addBox.appendChild(form);
@@ -1476,12 +1606,28 @@ function renderTodos() {
   }
 }
 
-function addTodo(projectId, title) {
+function addTodo(projectId, title, priority) {
   if (!projectId) return;
   const maxOrder = state.todos.filter(t => t.projectId === projectId).reduce((m,t) => Math.max(m, t.order||0), -1);
-  state.todos.push({ id: uuid(), projectId, title, startDate: null, endDate: null, done: false, order: maxOrder+1 });
+  state.todos.push({ id: uuid(), projectId, title, priority: priority || 'none', startDate: null, endDate: null, done: false, order: maxOrder+1 });
   scheduleSave(); render();
 }
+
+function setTodoView(view) {
+  state.todoView = view;
+  document.querySelectorAll('.todo-view-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.view === view);
+  });
+  renderTodos();
+}
+
+const PRIORITY_META = {
+  high: { label: '상', cls: 'priority-high' },
+  mid:  { label: '중', cls: 'priority-mid'  },
+  low:  { label: '하', cls: 'priority-low'  },
+  none: { label: '미정', cls: 'priority-none' },
+};
+const PRIORITY_ORDER = { high: 0, mid: 1, low: 2, none: 3 };
 
 // ============================================================
 // 렌더링 — 패널 3: 캘린더 (5주 슬라이딩 윈도우)
@@ -2155,12 +2301,12 @@ function attachTodoCtx(el, t) {
   el.addEventListener('contextmenu', e => {
     e.stopPropagation();
     const items = [];
+    items.push({ label: '🔍 상세 보기 / 수정', action: () => openTodoDetailModal(t.id) });
     items.push({ label: '📋 배정 일정 보기', action: () => openTodoInstancesModal(t.id) });
     items.push({ label: '📅 날짜 지정 배정', action: () => openAssignDateModal(t.id) });
     if (isMobile()) {
       items.push({ label: '📅 캘린더에서 날짜 선택', action: () => startMobileAssign(t.id) });
     }
-    items.push({ label: '수정', action: () => openEditTodoModal(t.id) });
     items.push({ label: '삭제', danger: true, action: () => {
       state.todos = state.todos.filter(x => x.id !== t.id && x.parentId !== t.id);
       scheduleSave(); render();
@@ -2436,14 +2582,15 @@ function openEditTodoModal(tid) {
   });
   sel.value = t.projectId;
   document.getElementById('input-edit-todo-title').value = t.title;
+  document.getElementById('select-edit-todo-priority').value = t.priority || 'none';
   const btn = document.getElementById('btn-save-edit-todo');
   btn.onclick = () => {
     const title = document.getElementById('input-edit-todo-title').value.trim();
     const projectId = sel.value;
+    const priority = document.getElementById('select-edit-todo-priority').value;
     if (!title) return;
-    // 원본 + 복사본 모두 업데이트
     state.todos.forEach(x => {
-      if (x.id === tid || x.parentId === tid) { x.title = title; x.projectId = projectId; }
+      if (x.id === tid || x.parentId === tid) { x.title = title; x.projectId = projectId; x.priority = priority; }
     });
     closeModal('modal-edit-todo');
     scheduleSave(); render();
@@ -2524,24 +2671,31 @@ function attachBarCtx(el, t) {
 function openTodoDetailModal(todoId) {
   const t = state.todos.find(x => x.id === todoId);
   if (!t) return;
-  const proj = state.projects.find(p => p.id === t.projectId);
+  // 원본 todo 찾기 (복사본인 경우 원본을 사용)
+  const originId = t.parentId || t.id;
+  const origin = state.todos.find(x => x.id === originId) || t;
+  const proj = state.projects.find(p => p.id === origin.projectId);
   const dateStr = t.startDate
     ? (t.startDate === t.endDate ? t.startDate : `${t.startDate} ~ ${t.endDate}`)
     : '날짜 미지정';
+  const pMeta = PRIORITY_META[origin.priority || 'none'];
 
-  document.getElementById('modal-todo-detail-title').textContent = t.title;
   document.getElementById('modal-todo-detail-meta').innerHTML =
     `📁 ${proj ? proj.clientName : '(프로젝트 없음)'}&nbsp;&nbsp;|&nbsp;&nbsp;📅 ${dateStr}`;
+  document.getElementById('input-todo-detail-title').value = origin.title;
+  document.getElementById('select-todo-detail-priority').value = origin.priority || 'none';
   document.getElementById('input-todo-detail-time').value = t.time || '';
   document.getElementById('input-todo-detail-memo').value = t.memo || '';
 
   document.getElementById('btn-save-todo-detail').onclick = () => {
+    const newTitle   = document.getElementById('input-todo-detail-title').value.trim() || origin.title;
+    const newPriority= document.getElementById('select-todo-detail-priority').value;
     const time = document.getElementById('input-todo-detail-time').value || null;
     const memo = document.getElementById('input-todo-detail-memo').value.trim() || null;
-    // 원본 + 복사본 모두 동기화
-    const originId = t.parentId || t.id;
     state.todos.forEach(x => {
       if (x.id === originId || x.parentId === originId) {
+        x.title    = newTitle;
+        x.priority = newPriority;
         x.time = time;
         x.memo = memo;
       }
@@ -2638,8 +2792,49 @@ function enableTodoDragSort(groupEl, projectId) {
 }
 
 // ============================================================
-// 패널 2-3 리사이저
+// 패널 리사이저 (1-2, 2-3)
 // ============================================================
+function initPanelResizer(resizerId, leftPanelId, rightPanelId, opts) {
+  if (isMobile()) return;
+  const resizer   = document.getElementById(resizerId);
+  const leftPanel = document.getElementById(leftPanelId);
+  const rightPanel= document.getElementById(rightPanelId);
+  if (!resizer || !leftPanel || !rightPanel) return;
+  let startX, startLeftW;
+
+  resizer.addEventListener('mousedown', e => {
+    e.preventDefault();
+    startX     = e.clientX;
+    startLeftW = leftPanel.getBoundingClientRect().width;
+    resizer.classList.add('dragging');
+    document.body.style.cursor    = 'col-resize';
+    document.body.style.userSelect= 'none';
+
+    function onMove(e) {
+      const delta  = e.clientX - startX;
+      const mainW  = document.getElementById('main').getBoundingClientRect().width;
+      const minW   = opts.minLeft  || 60;
+      const maxW   = opts.maxLeft  || mainW * 0.4;
+      const newW   = Math.max(minW, Math.min(startLeftW + delta, maxW));
+      leftPanel.style.width    = newW + 'px';
+      leftPanel.style.minWidth = '0';
+      if (opts.rightFlex) {
+        rightPanel.style.flex  = '1';
+        rightPanel.style.width = '';
+      }
+    }
+    function onUp() {
+      resizer.classList.remove('dragging');
+      document.body.style.cursor    = '';
+      document.body.style.userSelect= '';
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup',   onUp);
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup',   onUp);
+  });
+}
+
 // ============================================================
 // 터치 스와이프 (캘린더 세로 스와이프 → 주 이동)
 // ============================================================
@@ -2656,41 +2851,8 @@ function enableTodoDragSort(groupEl, projectId) {
   }, { passive: true });
 })();
 
-(function initResizer() {
-  if (isMobile()) return;
-  const resizer = document.getElementById('panel-resizer');
-  const panel2  = document.getElementById('panel2');
-  const panel3  = document.getElementById('panel3');
-  let startX, startW2;
-
-  resizer.addEventListener('mousedown', e => {
-    e.preventDefault();
-    startX = e.clientX;
-    startW2 = panel2.getBoundingClientRect().width;
-    resizer.classList.add('dragging');
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-
-    function onMove(e) {
-      const delta = e.clientX - startX;
-      const mainW = document.getElementById('main').getBoundingClientRect().width;
-      const newW2 = Math.max(80, Math.min(startW2 + delta, mainW * 0.5));
-      panel2.style.width = newW2 + 'px';
-      panel2.style.minWidth = '0';
-      panel3.style.flex = '1';
-      panel3.style.width = '';
-    }
-    function onUp() {
-      resizer.classList.remove('dragging');
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-    }
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-  });
-})();
+initPanelResizer('panel-resizer-12', 'panel1', 'panel2', { minLeft: 60, maxLeft: 300 });
+initPanelResizer('panel-resizer-23', 'panel2', 'panel3', { minLeft: 80, maxLeft: null, rightFlex: true });
 
 // ============================================================
 // 앱 시작
