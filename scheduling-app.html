@@ -1630,11 +1630,20 @@ function renderCalendar() {
       cell.addEventListener('mouseover', () => {
         if (state.resizingTodoId) {
           const todo = state.todos.find(t => t.id === state.resizingTodoId);
-          if (todo && ds >= todo.startDate) { todo.endDate = ds; render(); }
+          if (todo && ds >= todo.startDate) {
+            todo.endDate = ds; render();
+          } else if (todo && ds < todo.startDate) {
+            // 왼쪽으로 줄이기: endDate를 startDate와 같게 (최소 1일)
+            todo.endDate = todo.startDate; render();
+          }
         }
         if (state.resizingAssignId) {
           const assign = state.weekAssignments.find(a => a.id === state.resizingAssignId);
-          if (assign && ds >= assign.startDate) { assign.endDate = ds; render(); }
+          if (assign && ds >= assign.startDate) {
+            assign.endDate = ds; render();
+          } else if (assign && ds < assign.startDate) {
+            assign.endDate = assign.startDate; render();
+          }
         }
       });
 
