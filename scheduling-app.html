@@ -118,7 +118,12 @@
     user-select: none;
     overflow: hidden;
   }
-  .project-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+  .project-item .proj-drag-handle {
+    cursor: grab; color: #bbb; font-size: 0.9rem; flex-shrink: 0; padding-right: 4px; user-select: none;
+  }
+  .project-item .proj-drag-handle:hover { color: var(--primary); }
+  .project-item .proj-drag-handle:active { cursor: grabbing; }
+  .project-item .proj-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; cursor: pointer; }
   .project-item:hover { background: #f0f4ff; border-color: #c5d5f5; border-left-color: var(--primary); }
   .project-item.active { background: #dbeafe; border-color: #93c5fd; border-left-color: var(--primary); font-weight: 700; }
   .project-item .proj-del {
@@ -327,18 +332,18 @@
   .day-cell.saturday .day-num { color: #2980b9; }
 
   .day-num {
-    font-size: 0.72rem;
+    font-size: 0.66rem;
     font-weight: 600;
     color: var(--text-muted);
     margin-bottom: 3px;
+    white-space: nowrap;
   }
   .day-cell.today .day-num {
     background: var(--primary);
     color: #fff;
-    border-radius: 10px;
-    min-width: 18px; height: 18px;
-    padding: 0 3px;
-    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 4px;
+    padding: 1px 4px;
+    display: inline-block;
   }
 
   /* 클라이언트 assign 블록 */
@@ -1082,22 +1087,18 @@ function renderProjects() {
   form.className = 'add-proj-form';
   const inp = document.createElement('input');
   inp.type = 'text'; inp.placeholder = '프로젝트명 입력 후 Enter';
-  inp.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && inp.value.trim()) {
-      state.projects.push({ id: uuid(), clientName: inp.value.trim() });
-      inp.value = '';
-      scheduleSave(); render();
-    }
-  });
+  const addProject = () => {
+    const raw = inp.value.trim();
+    if (!raw) { inp.focus(); return; }
+    const name = raw.startsWith('■') ? raw : `■ ${raw}`;
+    state.projects.push({ id: uuid(), clientName: name });
+    inp.value = '';
+    scheduleSave(); render();
+  };
+  inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') addProject(); });
   const btn = document.createElement('button');
   btn.textContent = '+ 추가';
-  btn.addEventListener('click', () => {
-    if (inp.value.trim()) {
-      state.projects.push({ id: uuid(), clientName: inp.value.trim() });
-      inp.value = '';
-      scheduleSave(); render();
-    } else inp.focus();
-  });
+  btn.addEventListener('click', addProject);
   form.appendChild(inp);
   form.appendChild(btn);
   addBox.appendChild(form);
@@ -1110,8 +1111,8 @@ function renderProjects() {
     const div = document.createElement('div');
     div.className = 'project-item' + (state.activeProjectFilter === p.id ? ' active' : '');
     div.dataset.pid = p.id;
-    div.innerHTML = `<span>${p.clientName}</span>`;
-    div.addEventListener('click', () => {
+    div.innerHTML = `<span class="proj-drag-handle" title="드래그하여 순서 변경">⠿</span><span class="proj-name">${p.clientName}</span>`;
+    div.querySelector('.proj-name').addEventListener('click', () => {
       state.activeProjectFilter = (state.activeProjectFilter === p.id) ? null : p.id;
       render();
     });
@@ -1143,7 +1144,7 @@ function renderTodos() {
     group.className = 'todo-group';
     const lbl = document.createElement('div');
     lbl.className = 'todo-group-label';
-    lbl.textContent = `■ ${p.clientName}`;
+    lbl.textContent = p.clientName;
     lbl.style.background = color.bg;
     lbl.style.color = color.text;
     lbl.style.borderLeft = `3px solid ${color.border}`;
@@ -1342,9 +1343,9 @@ function renderCalendar() {
 
       const dayNum = document.createElement('div');
       dayNum.className = 'day-num';
-      const dateNum = dObj.getDate();
-      dayNum.textContent = dateNum === 1 ? `${dObj.getMonth()+1}/${dateNum}` : dateNum;
-      if (dateNum === 1) dayNum.style.fontWeight = '800';
+      const mm = String(dObj.getMonth()+1).padStart(2,'0');
+      const dd = String(dObj.getDate()).padStart(2,'0');
+      dayNum.textContent = `${dObj.getFullYear()}-${mm}-${dd}`;
       cell.appendChild(dayNum);
 
       cell.addEventListener('dragover', (e) => {
@@ -1446,7 +1447,7 @@ function renderCalendar() {
       spanLayer.appendChild(bar);
     });
 
-    // todo 바: 각 todo 바가 차지하는 열 범위의 실제 assign 수를 기준으로 top 계산
+    // todo 바: 열별 독립 레인 배치 알고리즘
     const recurringThisWeek = [];
     weekDates.forEach(ds => {
       getRecurringForDate(ds).forEach(r => recurringThisWeek.push(r));
@@ -1461,7 +1462,11 @@ function renderCalendar() {
       return (a.order||0) - (b.order||0);
     });
 
-    todosThisWeek.forEach((t, ti) => {
+    // 열별로 다음 빈 레인 번호를 추적 (assign 이후부터 시작)
+    // colNextLane[col] = 이 열에서 다음에 배치할 레인 인덱스 (0-based, assign 행 제외)
+    const colNextLane = new Array(7).fill(0);
+
+    todosThisWeek.forEach((t) => {
       const color = getProjectColor(t.projectId);
       const proj  = state.projects.find(p => p.id === t.projectId);
       const tEnd = t.endDate || t.startDate;
@@ -1470,12 +1475,24 @@ function renderCalendar() {
       const lastCol = weekDates.reduce((acc, d, i) => (d >= t.startDate && d <= tEnd ? i : acc), firstCol);
       const colSpan = lastCol - firstCol + 1;
 
-      // 이 todo 바가 차지하는 열 범위에서 최대 assign 수 → 해당 열들의 실제 공백만큼 offset
+      // 이 todo 바가 차지하는 열 범위에서 assign 수의 최대값 (assign 아래 시작점)
       let maxAssignInRange = 0;
       for (let c = firstCol; c <= lastCol; c++) {
         maxAssignInRange = Math.max(maxAssignInRange, colAssignCount[c]);
       }
-      const topPx = DAY_NUM_H + maxAssignInRange * (BAR_H + BAR_GAP) + ti * (BAR_H + BAR_GAP);
+
+      // 이 범위에서 가장 큰 레인 번호 → 모든 열이 그 레인부터 시작하도록 맞춤
+      let laneIdx = 0;
+      for (let c = firstCol; c <= lastCol; c++) {
+        laneIdx = Math.max(laneIdx, colNextLane[c]);
+      }
+
+      // 해당 열들의 레인 카운터 업데이트
+      for (let c = firstCol; c <= lastCol; c++) {
+        colNextLane[c] = laneIdx + 1;
+      }
+
+      const topPx = DAY_NUM_H + maxAssignInRange * (BAR_H + BAR_GAP) + laneIdx * (BAR_H + BAR_GAP);
 
       const bar = document.createElement('div');
       bar.className = 'span-bar todo-bar' + (t.done ? ' done-block' : '');
@@ -1765,8 +1782,9 @@ function openEditProjectModal(pid) {
   document.getElementById('input-edit-project-name').value = p.clientName;
   const btn = document.getElementById('btn-save-edit-project');
   btn.onclick = () => {
-    const name = document.getElementById('input-edit-project-name').value.trim();
-    if (!name) return;
+    const raw = document.getElementById('input-edit-project-name').value.trim();
+    if (!raw) return;
+    const name = raw.startsWith('■') ? raw : `■ ${raw}`;
     p.clientName = name;
     closeModal('modal-edit-project');
     scheduleSave(); render();
@@ -1892,22 +1910,39 @@ function attachBarCtx(el, t) {
 }
 
 // ============================================================
-// 패널 1 드래그 정렬
+// 패널 1 드래그 정렬 (핸들 방식)
 // ============================================================
 function enableProjectDragSort(el) {
   let dragSrcId = null;
   el.querySelectorAll('.project-item').forEach(item => {
-    item.setAttribute('draggable', 'true');
+    const handle = item.querySelector('.proj-drag-handle');
+    if (!handle) return;
+
+    handle.addEventListener('mousedown', () => { item.setAttribute('draggable', 'true'); });
+    handle.addEventListener('mouseup', () => { item.setAttribute('draggable', 'false'); });
+
     item.addEventListener('dragstart', e => {
+      if (!item.getAttribute('draggable') || item.getAttribute('draggable') === 'false') {
+        e.preventDefault(); return;
+      }
       dragSrcId = item.dataset.pid;
       e.dataTransfer.effectAllowed = 'move';
-      item.style.opacity = '0.5';
+      e.dataTransfer.setData('text/plain', dragSrcId);
+      setTimeout(() => { item.style.opacity = '0.4'; }, 0);
     });
-    item.addEventListener('dragend', () => { item.style.opacity = ''; });
-    item.addEventListener('dragover', e => { e.preventDefault(); item.style.background = '#e0e8ff'; });
-    item.addEventListener('dragleave', () => { item.style.background = ''; });
+    item.addEventListener('dragend', () => {
+      item.style.opacity = '';
+      item.setAttribute('draggable', 'false');
+      dragSrcId = null;
+    });
+    item.addEventListener('dragover', e => {
+      if (!dragSrcId) return;
+      e.preventDefault();
+      item.style.outline = '2px solid var(--primary)';
+    });
+    item.addEventListener('dragleave', () => { item.style.outline = ''; });
     item.addEventListener('drop', e => {
-      e.preventDefault(); item.style.background = '';
+      e.preventDefault(); item.style.outline = '';
       const tgtId = item.dataset.pid;
       if (dragSrcId && dragSrcId !== tgtId) {
         const srcIdx = state.projects.findIndex(p => p.id === dragSrcId);
