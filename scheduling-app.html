@@ -622,14 +622,123 @@
     white-space: nowrap;
   }
 
+  /* ===== 모바일 탭바 (데스크톱에서 숨김) ===== */
+  #mobile-tab-bar { display: none; }
+  #mobile-week-mode-btn { display: none; }
+
   /* ===== 모바일 ===== */
   @media (max-width: 767px) {
-    #main { flex-direction: column; }
-    .panel { width: 100% !important; min-width: unset !important; border-right: none; border-bottom: 1px solid var(--border); }
-    #panel1 { max-height: 25vh; }
-    #panel2 { max-height: 30vh; }
-    #panel3 { flex: 1; }
-    .day-cell { min-height: 60px; }
+    body { height: 100dvh; overflow: hidden; }
+
+    /* 헤더 축소 */
+    #header { padding: 8px 12px; }
+    #header h1 { font-size: 0.9rem; }
+    #watermark { display: none; }
+    .scroll-hint { display: none; }
+    #month-label { min-width: 90px; font-size: 0.85rem; }
+
+    /* 메인: 패널 절대 배치 */
+    #main { flex-direction: column; position: relative; overflow: hidden; }
+    #panel-resizer { display: none; }
+
+    .panel {
+      width: 100% !important;
+      min-width: unset !important;
+      border-right: none;
+      border-bottom: none;
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      display: none;
+    }
+
+    /* 탭 활성화 */
+    #main.mobile-tab-1 #panel1 { display: flex; }
+    #main.mobile-tab-2 #panel2 { display: flex; }
+    #main.mobile-tab-3 #panel3 { display: flex; }
+
+    /* 캘린더 터치 영역 확대 */
+    .week-row { min-height: 120px; }
+    .day-cell { min-height: 80px; padding: 2px 3px; font-size: 0.7rem; }
+    .day-num { font-size: 0.62rem; }
+    .span-bar { height: 22px; font-size: 0.65rem; }
+
+    /* 드래그 핸들 숨김 */
+    .resize-handle, .assign-resize-handle { display: none; }
+    .proj-drag-handle { display: none; }
+
+    /* 컨텍스트 메뉴: 터치 친화적 */
+    .ctx-item { padding: 12px 20px; font-size: 0.9rem; }
+
+    /* 모달 */
+    .modal { width: 95vw; padding: 20px; }
+    .modal-btns button { padding: 10px 16px; font-size: 0.9rem; }
+
+    /* 탭 바 */
+    #mobile-tab-bar {
+      display: flex;
+      height: 52px;
+      background: var(--panel-bg);
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+      box-shadow: 0 -2px 8px rgba(0,0,0,0.08);
+    }
+
+    .mobile-tab-btn {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      font-family: inherit;
+      padding: 6px 0;
+      transition: color 0.15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .mobile-tab-btn .tab-icon { font-size: 1.2rem; line-height: 1; }
+
+    .mobile-tab-btn.active {
+      color: var(--primary);
+      background: #ebf4ff;
+      border-top: 2px solid var(--primary);
+      margin-top: -1px;
+    }
+
+    /* 배정 중 칩 */
+    #mobile-assign-chip {
+      position: fixed;
+      top: 56px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--primary);
+      color: #fff;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 0.82rem;
+      z-index: 500;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      align-items: center;
+      gap: 8px;
+      white-space: nowrap;
+    }
+
+    /* 주 수 토글 버튼 */
+    #mobile-week-mode-btn {
+      display: inline-block;
+      font-size: 0.75rem;
+      padding: 3px 10px;
+      background: rgba(255,255,255,0.2);
+      border: none;
+      border-radius: 12px;
+      color: #fff;
+      cursor: pointer;
+    }
   }
 </style>
 </head>
@@ -680,6 +789,7 @@
     <span id="month-label"></span>
     <button id="btn-next-month">&#8594;</button>
     <span class="scroll-hint">↕ 스크롤로 주 이동</span>
+    <button id="mobile-week-mode-btn" onclick="toggleMobileWeeks()">5주</button>
   </div>
 </div>
 
@@ -862,6 +972,19 @@
   </div>
 </div>
 
+<div id="mobile-tab-bar">
+  <button class="mobile-tab-btn" data-tab="1" onclick="switchMobileTab(1)">
+    <span class="tab-icon">📁</span>프로젝트
+  </button>
+  <button class="mobile-tab-btn" data-tab="2" onclick="switchMobileTab(2)">
+    <span class="tab-icon">✅</span>Todo
+  </button>
+  <button class="mobile-tab-btn active" data-tab="3" onclick="switchMobileTab(3)">
+    <span class="tab-icon">📅</span>캘린더
+  </button>
+</div>
+<div id="mobile-assign-chip" style="display:none;"></div>
+
 <script>
 // ============================================================
 // 상태 관리
@@ -880,6 +1003,8 @@ let state = {
   ctrlDragging: false,
   resizingTodoId: null,
   resizingAssignId: null,
+  mobileWeeks: 5,
+  mobileAssigningTodoId: null,
 };
 
 let gistToken = localStorage.getItem('gist_token') || '';
@@ -1287,7 +1412,7 @@ function renderCalendar() {
   document.getElementById('month-label').textContent = getCalendarLabel();
 
   const todayStr = toISO(new Date());
-  const WEEKS = 5;
+  const WEEKS = isMobile() ? state.mobileWeeks : 5;
 
   // 요일 헤더
   const hdr = document.createElement('div');
@@ -1345,7 +1470,9 @@ function renderCalendar() {
       dayNum.className = 'day-num';
       const mm = String(dObj.getMonth()+1).padStart(2,'0');
       const dd = String(dObj.getDate()).padStart(2,'0');
-      dayNum.textContent = `${dObj.getFullYear()}-${mm}-${dd}`;
+      dayNum.textContent = isMobile()
+        ? `${dObj.getMonth()+1}/${dObj.getDate()}`
+        : `${dObj.getFullYear()}-${mm}-${dd}`;
       cell.appendChild(dayNum);
 
       cell.addEventListener('dragover', (e) => {
@@ -1397,6 +1524,15 @@ function renderCalendar() {
           if (assign && ds >= assign.startDate) { assign.endDate = ds; render(); }
         }
       });
+
+      // 모바일: 배정 모드에서 날짜 셀 탭 → 배정 완료
+      if (isMobile()) {
+        cell.addEventListener('click', () => {
+          if (!state.mobileAssigningTodoId) return;
+          assignTodoToDate(state.mobileAssigningTodoId, ds);
+          cancelMobileAssign();
+        });
+      }
 
       grid.appendChild(cell);
     });
@@ -1713,6 +1849,64 @@ document.getElementById('btn-next-month').addEventListener('click', () => {
 });
 
 // 패널3 스크롤 → 1주 이동
+// ============================================================
+// 모바일 유틸
+// ============================================================
+function isMobile() { return window.innerWidth <= 767; }
+
+function switchMobileTab(n) {
+  const main = document.getElementById('main');
+  main.className = `mobile-tab-${n}`;
+  document.querySelectorAll('.mobile-tab-btn').forEach(btn => {
+    btn.classList.toggle('active', Number(btn.dataset.tab) === n);
+  });
+}
+
+function toggleMobileWeeks() {
+  state.mobileWeeks = (state.mobileWeeks === 5) ? 2 : 5;
+  const btn = document.getElementById('mobile-week-mode-btn');
+  if (btn) btn.textContent = `${state.mobileWeeks}주`;
+  renderCalendar();
+}
+
+function startMobileAssign(todoId) {
+  state.mobileAssigningTodoId = todoId;
+  const todo = state.todos.find(t => t.id === todoId);
+  if (!todo) return;
+  const chip = document.getElementById('mobile-assign-chip');
+  chip.style.display = 'flex';
+  chip.innerHTML = `📌 배정 중: <strong>${todo.title}</strong><button onclick="cancelMobileAssign()" style="background:rgba(255,255,255,0.3);border:none;color:#fff;border-radius:10px;padding:2px 8px;cursor:pointer;margin-left:8px;font-size:0.8rem;">취소</button>`;
+  switchMobileTab(3);
+}
+
+function cancelMobileAssign() {
+  state.mobileAssigningTodoId = null;
+  const chip = document.getElementById('mobile-assign-chip');
+  if (chip) chip.style.display = 'none';
+}
+
+function assignTodoToDate(todoId, ds) {
+  const todo = state.todos.find(t => t.id === todoId);
+  if (!todo) return;
+  if (todo.startDate) {
+    const originId = todo.parentId || todo.id;
+    state.todos.push({ id: uuid(), projectId: todo.projectId, title: todo.title,
+      parentId: originId, startDate: ds, endDate: ds, done: false, order: todo.order });
+  } else {
+    todo.startDate = ds;
+    todo.endDate = ds;
+  }
+  scheduleSave();
+  render();
+}
+
+function applyMobileSetup() {
+  if (!isMobile()) return;
+  switchMobileTab(3);
+  const btn = document.getElementById('mobile-week-mode-btn');
+  if (btn) btn.style.display = 'inline-block';
+}
+
 let wheelThrottle = false;
 document.getElementById('panel3').addEventListener('wheel', (e) => {
   if (wheelThrottle) return;
@@ -1806,13 +2000,16 @@ function deleteProject(pid) {
 function attachTodoCtx(el, t) {
   el.addEventListener('contextmenu', e => {
     e.stopPropagation();
-    showCtxMenu(e, [
-      { label: '수정', action: () => openEditTodoModal(t.id) },
-      { label: '삭제', danger: true, action: () => {
-        state.todos = state.todos.filter(x => x.id !== t.id && x.parentId !== t.id);
-        scheduleSave(); render();
-      }},
-    ]);
+    const items = [];
+    if (isMobile()) {
+      items.push({ label: '📅 일정에 배정', action: () => startMobileAssign(t.id) });
+    }
+    items.push({ label: '수정', action: () => openEditTodoModal(t.id) });
+    items.push({ label: '삭제', danger: true, action: () => {
+      state.todos = state.todos.filter(x => x.id !== t.id && x.parentId !== t.id);
+      scheduleSave(); render();
+    }});
+    showCtxMenu(e, items);
   });
 }
 
@@ -1997,7 +2194,24 @@ function enableTodoDragSort(groupEl, projectId) {
 // ============================================================
 // 패널 2-3 리사이저
 // ============================================================
+// ============================================================
+// 터치 스와이프 (캘린더 세로 스와이프 → 주 이동)
+// ============================================================
+(function initTouchSwipe() {
+  const panel3 = document.getElementById('panel3');
+  let touchStartY = 0;
+  panel3.addEventListener('touchstart', e => {
+    touchStartY = e.touches[0].clientY;
+  }, { passive: true });
+  panel3.addEventListener('touchend', e => {
+    if (state.mobileAssigningTodoId) return;
+    const dy = e.changedTouches[0].clientY - touchStartY;
+    if (Math.abs(dy) > 50) shiftCalendar(dy < 0 ? 1 : -1);
+  }, { passive: true });
+})();
+
 (function initResizer() {
+  if (isMobile()) return;
   const resizer = document.getElementById('panel-resizer');
   const panel2  = document.getElementById('panel2');
   const panel3  = document.getElementById('panel3');
@@ -2043,7 +2257,10 @@ async function init() {
     await loadFromGist();
     render();
   }
+  applyMobileSetup();
 }
+
+window.addEventListener('resize', applyMobileSetup);
 
 // 리사이즈 mouseup — 전역
 document.addEventListener('mouseup', () => {
