@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>일정관리 — PwC</title>
+<title>일정관리 by Kihyeon Kim</title>
 <style>
   /* ===== 기본 리셋 & 변수 ===== */
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -15,8 +15,8 @@
     --text-muted: #6c757d;
     --primary: #2c5282;        /* 진한 파란색 — Todo 블록 */
     --primary-light: #ebf4ff;  /* 연한 파란 — Todo 블록 배경 */
-    --assign-bg: #cce5f6;      /* 연한 하늘색 — 클라이언트 주간 블록 */
-    --assign-text: #1a6fa8;
+    --assign-bg: #ebebeb;      /* 옅은 회색 — 프로젝트 배정 블록 */
+    --assign-text: #555555;
     --yellow: #fff3cd;         /* 미배정 Todo 노란 배경 */
     --yellow-border: #ffc107;
     --done-text: #6c757d;
@@ -88,24 +88,38 @@
     padding: 10px;
   }
 
-  /* ===== 패널 1 — 프로젝트 (15%) ===== */
-  #panel1 { width: 15%; min-width: 140px; }
+  /* ===== 패널 1 — 프로젝트 (7%) ===== */
+  #panel1 { width: 7%; min-width: 70px; }
+  #panel1 .panel-body {
+    display: flex; flex-direction: column; padding: 0; overflow: hidden;
+  }
+  #project-add-box {
+    flex-shrink: 0;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  #project-scroll {
+    flex: 1; overflow-y: auto; padding: 10px;
+  }
 
   .project-item {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 7px 9px;
+    padding: 6px 7px;
     border-radius: var(--radius);
     cursor: pointer;
-    font-size: 0.85rem;
+    font-size: 0.82rem;
     margin-bottom: 4px;
     border: 1px solid transparent;
+    border-left: 3px solid transparent;
     transition: background 0.15s;
     user-select: none;
+    overflow: hidden;
   }
-  .project-item:hover { background: #f0f4ff; border-color: #c5d5f5; }
-  .project-item.active { background: #dbeafe; border-color: #93c5fd; font-weight: 600; }
+  .project-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+  .project-item:hover { background: #f0f4ff; border-color: #c5d5f5; border-left-color: var(--primary); }
+  .project-item.active { background: #dbeafe; border-color: #93c5fd; border-left-color: var(--primary); font-weight: 700; }
   .project-item .proj-del {
     opacity: 0;
     background: none; border: none;
@@ -113,55 +127,77 @@
   }
   .project-item:hover .proj-del { opacity: 1; }
 
-  .add-btn {
-    width: 100%; padding: 6px 0;
-    border: 1px dashed var(--border);
-    background: none; border-radius: var(--radius);
-    color: var(--text-muted); font-size: 0.82rem;
-    cursor: pointer; margin-top: 6px;
-    transition: border-color 0.15s, color 0.15s;
+  .add-proj-form {
+    display: flex; flex-direction: column; gap: 5px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 8px;
+    background: #f8fafc;
   }
-  .add-btn:hover { border-color: var(--primary); color: var(--primary); }
+  .add-proj-form input {
+    font-size: 0.82rem; padding: 5px 8px;
+    border: 1px solid var(--border); border-radius: var(--radius);
+    outline: none; font-family: inherit; background: #fff;
+  }
+  .add-proj-form input:focus { border-color: var(--primary); }
+  .add-proj-form button {
+    padding: 5px; background: var(--primary); color: #fff;
+    border: none; border-radius: var(--radius); cursor: pointer; font-size: 0.82rem;
+  }
 
-  /* ===== 패널 2 — Todo 리스트 (20%) ===== */
-  #panel2 { width: 20%; min-width: 190px; }
+  /* ===== 패널 2 — Todo 리스트 ===== */
+  #panel2 { width: 180px; min-width: 80px; flex-shrink: 0; }
 
   .todo-group { margin-bottom: 12px; }
   .todo-group-label {
-    font-size: 0.72rem; font-weight: 700;
-    color: var(--assign-text);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    padding: 3px 4px 5px;
-    border-bottom: 1px solid var(--border);
-    margin-bottom: 5px;
+    font-size: 0.78rem; font-weight: 800;
+    letter-spacing: 0.3px;
+    padding: 4px 6px;
+    border-radius: 4px;
+    margin-bottom: 6px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .todo-item {
     display: flex;
-    align-items: flex-start;
-    gap: 6px;
-    padding: 6px 8px;
+    flex-direction: column;
+    gap: 2px;
+    padding: 5px 8px;
     border-radius: var(--radius);
     border: 1px solid var(--border);
     margin-bottom: 4px;
+    margin-left: 6px;
     font-size: 0.83rem;
     cursor: grab;
     background: #fff;
     transition: box-shadow 0.15s;
     position: relative;
   }
-  .todo-item.unscheduled {
-    background: var(--yellow);
-    border-color: var(--yellow-border);
+  .todo-item-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    width: 100%;
+  }
+  .need-schedule {
+    color: #dc3545;
+    font-size: 0.68rem;
+    font-weight: 700;
+    line-height: 1.2;
   }
   .todo-item.done-item .todo-title {
     text-decoration: line-through;
     color: var(--done-text);
   }
   .todo-item:active { cursor: grabbing; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
-  .todo-item input[type=checkbox] { margin-top: 2px; flex-shrink: 0; cursor: pointer; }
-  .todo-title { flex: 1; line-height: 1.4; word-break: break-all; }
+  .todo-item input[type=checkbox] { flex-shrink: 0; cursor: pointer; }
+  .todo-count-badge {
+    font-size: 0.65rem; font-weight: 700; color: var(--primary);
+    background: #dbeafe; border-radius: 3px; padding: 0 3px; flex-shrink: 0;
+  }
+  .todo-title { flex: 1; line-height: 1.4; overflow-wrap: break-word; word-break: break-word; white-space: normal; }
   .todo-del {
     opacity: 0; background: none; border: none;
     color: #dc3545; cursor: pointer; font-size: 0.72rem;
@@ -169,14 +205,29 @@
   }
   .todo-item:hover .todo-del { opacity: 1; }
 
+  #panel2 .panel-body {
+    display: flex; flex-direction: column; padding: 0; overflow: hidden;
+  }
+  #todo-add-box {
+    flex-shrink: 0;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  #todo-scroll {
+    flex: 1; overflow-y: auto; padding: 10px;
+  }
+
   .add-todo-form {
     display: flex; flex-direction: column; gap: 5px;
-    margin-top: 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 8px;
+    background: #f8fafc;
   }
   .add-todo-form select, .add-todo-form input {
     font-size: 0.82rem; padding: 5px 8px;
     border: 1px solid var(--border); border-radius: var(--radius);
-    outline: none; font-family: inherit;
+    outline: none; font-family: inherit; background: #fff;
   }
   .add-todo-form select:focus, .add-todo-form input:focus {
     border-color: var(--primary);
@@ -186,23 +237,45 @@
     border: none; border-radius: var(--radius); cursor: pointer; font-size: 0.82rem;
   }
 
-  /* ===== 패널 3 — 월간 캘린더 (65%) ===== */
-  #panel3 { width: 65%; border-right: none; }
-  #panel3 .panel-body { padding: 8px 10px; }
+  /* ===== 패널 3 — 월간 캘린더 ===== */
+  #panel3 { flex: 1; min-width: 200px; border-right: none; }
+  #panel3 .panel-body { padding: 8px 10px; display: flex; flex-direction: column; overflow-y: auto; }
+  #calendar-body { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 
-  /* 주간 assign 버튼 */
+  /* 주간 assign 버튼 바 */
   #assign-btn-bar {
     padding: 6px 10px 4px;
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
   }
-  #assign-btn-bar button {
+  #btn-add-assign {
     font-size: 0.78rem; padding: 4px 10px;
     background: var(--assign-bg); color: var(--assign-text);
     border: 1px solid #90cdf4; border-radius: var(--radius);
     cursor: pointer;
   }
-  #assign-btn-bar button:hover { background: #b3ddf2; }
+  #btn-add-assign:hover { background: #b3ddf2; }
+
+  #recurring-btn-group {
+    display: flex;
+    gap: 4px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 2px;
+    background: #f8fafc;
+  }
+  #recurring-btn-group button {
+    font-size: 0.78rem; padding: 3px 9px;
+    background: #fff; color: var(--text-muted);
+    border: 1px solid var(--border); border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  #recurring-btn-group button:hover { background: #f0f4ff; color: var(--primary); border-color: #c5d5f5; }
 
   /* 캘린더 요일 헤더 */
   .cal-header {
@@ -210,6 +283,7 @@
     grid-template-columns: repeat(7, 1fr);
     gap: 2px;
     margin-bottom: 3px;
+    flex-shrink: 0;
   }
   .cal-header-cell {
     text-align: center;
@@ -218,21 +292,25 @@
     color: var(--text-muted);
     padding: 3px 0;
   }
-  .cal-header-cell:first-child { color: #c0392b; }
-  .cal-header-cell:last-child  { color: #2980b9; }
+  .cal-header-cell:last-child { color: #c0392b; }
+  .cal-header-cell:nth-child(6)  { color: #2980b9; }
 
   /* 주 단위 래퍼 */
-  .week-row { margin-bottom: 4px; }
+  .week-row { margin-bottom: 4px; flex: 1 1 0; display: flex; flex-direction: column; min-height: 60px; position: relative; }
+  .week-row:last-child { margin-bottom: 0; }
+  .week-row.expanded { flex: 4 1 0; min-height: 200px; }
 
   /* 날짜 셀 그리드 */
   .day-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
     gap: 2px;
+    flex: 1;
+    position: relative;
   }
 
   .day-cell {
-    min-height: 80px;
+    min-height: 60px;
     border: 1px solid var(--border);
     border-radius: var(--radius);
     background: #fff;
@@ -262,29 +340,92 @@
     display: flex; align-items: center; justify-content: center;
   }
 
-  /* 클라이언트 assign 블록 (얇음) */
+  /* 클라이언트 assign 블록 */
   .assign-block {
     background: var(--assign-bg);
     color: var(--assign-text);
     border-radius: 3px;
-    padding: 1px 5px;
+    padding: 2px 8px;
     font-size: 0.68rem;
     font-weight: 600;
-    margin-bottom: 2px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    line-height: 1.5;
+    line-height: 1.6;
     cursor: default;
     display: flex;
     align-items: center;
     justify-content: space-between;
+    border-left: 3px solid #aaa;
   }
   .assign-block .del-assign {
     opacity: 0; background: none; border: none;
-    color: var(--assign-text); cursor: pointer; font-size: 0.65rem; padding: 0 1px;
+    color: var(--assign-text); cursor: pointer; font-size: 0.65rem; padding: 0 1px; flex-shrink: 0;
   }
   .assign-block:hover .del-assign { opacity: 1; }
+
+  /* span overlay 레이어 */
+  .span-layer {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    pointer-events: none;
+    z-index: 10;
+    overflow: hidden;
+  }
+  .span-bar {
+    position: absolute;
+    height: 20px;
+    pointer-events: all;
+    border-radius: 3px;
+    font-size: 0.68rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    padding: 0 6px;
+    overflow: hidden;
+    white-space: nowrap;
+    box-sizing: border-box;
+    cursor: default;
+  }
+  .span-bar.assign-bar {
+    background: var(--assign-bg);
+    color: var(--assign-text);
+    border-left: 3px solid #aaa;
+    justify-content: space-between;
+  }
+  .span-bar.assign-bar .del-assign {
+    opacity: 0; background: none; border: none;
+    color: #888; cursor: pointer; font-size: 0.65rem; padding: 0 1px; flex-shrink: 0;
+  }
+  .span-bar.assign-bar:hover .del-assign { opacity: 1; }
+  .span-bar.assign-bar .assign-resize-handle {
+    cursor: col-resize; color: #bbb; font-size: 0.7rem; padding: 0 2px;
+    flex-shrink: 0; user-select: none; letter-spacing: -1px;
+  }
+  .span-bar.assign-bar .assign-resize-handle:hover { color: #666; }
+  .span-bar.todo-bar {
+    border-left: 3px solid var(--primary);
+    justify-content: flex-start;
+    gap: 4px;
+  }
+  .span-bar.todo-bar input[type=checkbox] { flex-shrink: 0; cursor: pointer; margin: 0; }
+  .span-bar.todo-bar .span-todo-title { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+  .span-bar.todo-bar .cal-todo-del {
+    opacity: 0; background: none; border: none;
+    color: #dc3545; cursor: pointer; font-size: 0.68rem; flex-shrink: 0;
+  }
+  .span-bar.todo-bar:hover .cal-todo-del { opacity: 1; }
+  .span-bar.todo-bar .resize-handle {
+    cursor: col-resize; color: #bbb; font-size: 0.7rem; padding: 0 2px;
+    flex-shrink: 0; user-select: none; letter-spacing: -1px;
+  }
+  .span-bar.todo-bar .resize-handle:hover { color: #666; }
+  .span-bar.todo-bar.done-block {
+    background: #f0f0f0 !important;
+    border-color: #ccc !important;
+    border-left-color: #999 !important;
+  }
+  .span-bar.todo-bar.done-block .span-todo-title { text-decoration: line-through; color: var(--done-text); }
 
   /* Todo 블록 (캘린더 안) */
   .cal-todo-block {
@@ -292,12 +433,12 @@
     border: 1px solid #bfdbfe;
     border-left: 3px solid var(--primary);
     border-radius: 3px;
-    padding: 2px 5px;
+    padding: 3px 5px;
     font-size: 0.72rem;
     margin-bottom: 2px;
     display: flex;
-    align-items: center;
-    gap: 4px;
+    flex-direction: column;
+    align-items: flex-start;
     position: relative;
     cursor: default;
   }
@@ -310,72 +451,41 @@
     text-decoration: line-through;
     color: var(--done-text);
   }
+  .cal-todo-proj {
+    font-size: 0.60rem;
+    color: var(--assign-text);
+    font-weight: 700;
+    white-space: nowrap;
+    background: #dbeafe;
+    border-radius: 2px;
+    padding: 0 3px;
+    margin-bottom: 2px;
+    display: block;
+  }
+  .cal-todo-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    width: 100%;
+  }
   .cal-todo-title { flex: 1; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .cal-todo-block input[type=checkbox] { flex-shrink: 0; cursor: pointer; }
+  .cal-todo-row input[type=checkbox] { flex-shrink: 0; cursor: pointer; }
   .cal-todo-del {
     opacity: 0; background: none; border: none;
-    color: #dc3545; cursor: pointer; font-size: 0.68rem;
+    color: #dc3545; cursor: pointer; font-size: 0.68rem; flex-shrink: 0;
   }
   .cal-todo-block:hover .cal-todo-del { opacity: 1; }
-
-  /* 주차 확장 버튼 */
-  .week-expand-btn {
-    width: 100%;
-    margin-top: 3px;
-    padding: 3px 0;
-    font-size: 0.72rem;
-    color: var(--text-muted);
-    background: #f8f9fa;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    cursor: pointer;
-    text-align: center;
-  }
-  .week-expand-btn:hover { background: #e9ecef; color: var(--primary); }
-
-  /* 주차 확장 뷰 */
-  .week-detail {
-    margin-top: 4px;
-    border: 1px solid var(--primary);
-    border-radius: var(--radius);
-    background: #fafcff;
-    overflow: hidden;
-  }
-  .week-detail-header {
-    background: var(--primary);
-    color: #fff;
-    padding: 5px 12px;
-    font-size: 0.78rem;
-    font-weight: 600;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  .week-detail-header button {
-    background: none; border: none; color: #fff; cursor: pointer; font-size: 0.82rem;
-  }
-  .week-detail-grid {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    gap: 2px;
-    padding: 6px;
-  }
-  .week-detail-cell {
-    min-height: 100px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: #fff;
-    padding: 4px 5px;
-    font-size: 0.75rem;
-  }
-  .week-detail-cell .day-label {
+  .resize-handle {
+    cursor: col-resize;
+    color: #bbb;
     font-size: 0.7rem;
-    color: var(--text-muted);
-    font-weight: 600;
-    margin-bottom: 4px;
-    border-bottom: 1px solid var(--border);
-    padding-bottom: 2px;
+    padding: 0 2px;
+    flex-shrink: 0;
+    user-select: none;
+    letter-spacing: -1px;
   }
+  .resize-handle:hover { color: #666; }
+
 
   /* ===== 모달 / 오버레이 ===== */
   .modal-overlay {
@@ -458,6 +568,39 @@
   #btn-setup-save { background: var(--primary); color: #fff; }
   #btn-setup-save:hover { background: #1e3a5f; }
 
+  /* ===== 컨텍스트 메뉴 ===== */
+  #ctx-menu {
+    position: fixed;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+    z-index: 9999;
+    min-width: 120px;
+    padding: 4px 0;
+    display: none;
+  }
+  #ctx-menu.show { display: block; }
+  .ctx-item {
+    padding: 7px 16px;
+    font-size: 0.83rem;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .ctx-item:hover { background: #f0f4ff; }
+  .ctx-item.danger { color: #dc3545; }
+  .ctx-item.danger:hover { background: #fff0f0; }
+
+  /* ===== 패널 리사이저 ===== */
+  #panel-resizer {
+    width: 5px;
+    background: var(--border);
+    cursor: col-resize;
+    flex-shrink: 0;
+    transition: background 0.15s;
+  }
+  #panel-resizer:hover, #panel-resizer.dragging { background: var(--primary); }
+
   /* ===== 스크롤바 ===== */
   ::-webkit-scrollbar { width: 5px; height: 5px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -465,15 +608,12 @@
 
   /* ===== 워터마크 ===== */
   #watermark {
-    position: fixed;
-    top: 10px;
-    left: 16px;
-    font-size: 0.68rem;
-    color: rgba(255,255,255,0.55);
+    font-size: 0.65rem;
+    color: rgba(255,255,255,0.6);
     pointer-events: none;
-    z-index: 9999;
     letter-spacing: 0.3px;
     font-style: italic;
+    white-space: nowrap;
   }
 
   /* ===== 모바일 ===== */
@@ -525,12 +665,10 @@
   </div>
 </div>
 
-<!-- ===== 워터마크 ===== -->
-<div id="watermark">made by Kihyeon Kim</div>
-
 <!-- ===== 헤더 ===== -->
 <div id="header">
   <h1>📋 일정관리</h1>
+  <div id="watermark">made by Kihyeon Kim</div>
   <div id="month-nav">
     <button id="btn-prev-month">&#8592;</button>
     <span id="month-label"></span>
@@ -544,19 +682,32 @@
   <!-- 패널 1: 진행중 프로젝트 -->
   <div class="panel" id="panel1">
     <div class="panel-header">진행중 프로젝트</div>
-    <div class="panel-body" id="project-list"></div>
+    <div class="panel-body" id="panel1-body">
+      <div id="project-add-box"></div>
+      <div id="project-scroll"></div>
+    </div>
   </div>
 
   <!-- 패널 2: Todo 리스트 -->
   <div class="panel" id="panel2">
     <div class="panel-header">Todo 리스트</div>
-    <div class="panel-body" id="todo-list"></div>
+    <div class="panel-body" id="panel2-body">
+      <div id="todo-add-box"></div>
+      <div id="todo-scroll"></div>
+    </div>
   </div>
+
+  <!-- 패널 2-3 구분 드래그 핸들 -->
+  <div id="panel-resizer"></div>
 
   <!-- 패널 3: 월간 캘린더 -->
   <div class="panel" id="panel3">
     <div id="assign-btn-bar">
-      <button id="btn-add-assign">+ 기본 클라이언트 배정 추가</button>
+      <button id="btn-add-assign">+ 프로젝트 배정 추가</button>
+      <div id="recurring-btn-group">
+        <button id="btn-add-recurring">+ 반복일정 추가</button>
+        <button id="btn-del-recurring">반복일정 삭제</button>
+      </div>
     </div>
     <div class="panel-header">월간 캘린더</div>
     <div class="panel-body" id="calendar-body"></div>
@@ -564,11 +715,42 @@
 
 </div>
 
+<!-- ===== 컨텍스트 메뉴 ===== -->
+<div id="ctx-menu"></div>
+
+<!-- ===== 모달: 프로젝트 수정 ===== -->
+<div class="modal-overlay" id="modal-edit-project">
+  <div class="modal">
+    <h2>프로젝트 수정</h2>
+    <label>프로젝트명</label>
+    <input type="text" id="input-edit-project-name">
+    <div class="modal-btns">
+      <button class="btn-secondary" onclick="closeModal('modal-edit-project')">취소</button>
+      <button class="btn-primary" id="btn-save-edit-project">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 모달: Todo 수정 ===== -->
+<div class="modal-overlay" id="modal-edit-todo">
+  <div class="modal">
+    <h2>Todo 수정</h2>
+    <label>프로젝트</label>
+    <select id="select-edit-todo-project"></select>
+    <label>업무 내용</label>
+    <input type="text" id="input-edit-todo-title">
+    <div class="modal-btns">
+      <button class="btn-secondary" onclick="closeModal('modal-edit-todo')">취소</button>
+      <button class="btn-primary" id="btn-save-edit-todo">저장</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== 모달: 프로젝트 추가 ===== -->
 <div class="modal-overlay" id="modal-project">
   <div class="modal">
-    <h2>프로젝트(클라이언트) 추가</h2>
-    <label>클라이언트명</label>
+    <h2>프로젝트 추가</h2>
+    <label>프로젝트명</label>
     <input type="text" id="input-project-name" placeholder="예: 삼성전자">
     <div class="modal-btns">
       <button class="btn-secondary" onclick="closeModal('modal-project')">취소</button>
@@ -581,7 +763,7 @@
 <div class="modal-overlay" id="modal-todo">
   <div class="modal">
     <h2>Todo 추가</h2>
-    <label>클라이언트</label>
+    <label>프로젝트</label>
     <select id="select-todo-project"></select>
     <label>업무 내용</label>
     <input type="text" id="input-todo-title" placeholder="예: 재무제표 검토">
@@ -592,17 +774,83 @@
   </div>
 </div>
 
-<!-- ===== 모달: 기본 클라이언트 배정 ===== -->
+<!-- ===== 모달: 반복일정 추가 ===== -->
+<div class="modal-overlay" id="modal-recurring">
+  <div class="modal">
+    <h2>반복일정 추가</h2>
+    <label>프로젝트</label>
+    <select id="select-recurring-project"></select>
+    <label>업무 내용</label>
+    <input type="text" id="input-recurring-title" placeholder="예: 주간 미팅">
+    <label>반복 요일 (복수 선택 가능)</label>
+    <div id="recurring-weekdays" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">
+      <label style="display:flex;align-items:center;gap:3px;font-size:0.85rem;"><input type="checkbox" value="0"> 월</label>
+      <label style="display:flex;align-items:center;gap:3px;font-size:0.85rem;"><input type="checkbox" value="1"> 화</label>
+      <label style="display:flex;align-items:center;gap:3px;font-size:0.85rem;"><input type="checkbox" value="2"> 수</label>
+      <label style="display:flex;align-items:center;gap:3px;font-size:0.85rem;"><input type="checkbox" value="3"> 목</label>
+      <label style="display:flex;align-items:center;gap:3px;font-size:0.85rem;"><input type="checkbox" value="4"> 금</label>
+      <label style="display:flex;align-items:center;gap:3px;font-size:0.85rem;"><input type="checkbox" value="5"> 토</label>
+      <label style="display:flex;align-items:center;gap:3px;font-size:0.85rem;"><input type="checkbox" value="6"> 일</label>
+    </div>
+    <label>시작일</label>
+    <input type="date" id="input-recurring-start">
+    <label>종료일</label>
+    <input type="date" id="input-recurring-end">
+    <div class="modal-btns">
+      <button class="btn-secondary" onclick="closeModal('modal-recurring')">취소</button>
+      <button class="btn-primary" id="btn-save-recurring">추가</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 모달: 반복일정 삭제 ===== -->
+<div class="modal-overlay" id="modal-recurring-del">
+  <div class="modal">
+    <h2>반복일정 삭제</h2>
+    <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:10px;">선택한 기간 내에 해당하는 반복일정을 삭제합니다.</p>
+    <label>삭제할 반복일정</label>
+    <select id="select-recurring-del"></select>
+    <label>삭제 시작일</label>
+    <input type="date" id="input-recurring-del-start">
+    <label>삭제 종료일</label>
+    <input type="date" id="input-recurring-del-end">
+    <div class="modal-btns">
+      <button class="btn-secondary" onclick="closeModal('modal-recurring-del')">취소</button>
+      <button class="btn-primary" id="btn-confirm-recurring-del" style="background:#dc3545;">삭제</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 모달: 프로젝트 배정 ===== -->
 <div class="modal-overlay" id="modal-assign">
   <div class="modal">
-    <h2>기본 클라이언트 배정</h2>
-    <label>클라이언트</label>
+    <h2>프로젝트 배정</h2>
+    <label>프로젝트</label>
     <select id="select-assign-project"></select>
-    <label>주 선택 (해당 주 월요일 날짜)</label>
-    <select id="select-assign-week"></select>
+    <label>시작일</label>
+    <input type="date" id="input-assign-start">
+    <label>종료일</label>
+    <input type="date" id="input-assign-end">
     <div class="modal-btns">
       <button class="btn-secondary" onclick="closeModal('modal-assign')">취소</button>
       <button class="btn-primary" id="btn-save-assign">배정</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 모달: 프로젝트 배정 수정 ===== -->
+<div class="modal-overlay" id="modal-edit-assign">
+  <div class="modal">
+    <h2>프로젝트 배정 수정</h2>
+    <label>프로젝트</label>
+    <select id="select-edit-assign-project"></select>
+    <label>시작일</label>
+    <input type="date" id="input-edit-assign-start">
+    <label>종료일</label>
+    <input type="date" id="input-edit-assign-end">
+    <div class="modal-btns">
+      <button class="btn-secondary" onclick="closeModal('modal-edit-assign')">취소</button>
+      <button class="btn-primary" id="btn-save-edit-assign">저장</button>
     </div>
   </div>
 </div>
@@ -612,19 +860,39 @@
 // 상태 관리
 // ============================================================
 let state = {
-  projects: [],       // { id, clientName }
-  weekAssignments: [], // { id, projectId, weekStart, order }
-  todos: [],          // { id, projectId, title, startDate, endDate, done, order }
+  projects: [],          // { id, clientName }
+  weekAssignments: [],   // { id, projectId, startDate, endDate, order }
+  todos: [],             // { id, projectId, title, startDate, endDate, done, order, parentId? }
+  recurringTodos: [],    // { id, projectId, title, weekdays: [0-6 mon=0], startDate, endDate }
   currentYear: new Date().getFullYear(),
   currentMonth: new Date().getMonth(), // 0-based
-  expandedWeeks: new Set(), // "YYYY-MM-DD" (해당 주 월요일)
   activeProjectFilter: null,
   draggingTodoId: null,
+  draggingFromCalendar: false,
+  ctrlDragging: false,
+  resizingTodoId: null,
+  resizingAssignId: null,
 };
 
 let gistToken = localStorage.getItem('gist_token') || '';
 let gistId    = localStorage.getItem('gist_id')    || '';
 let saveTimer = null;
+
+const PROJECT_COLORS = [
+  { bg: '#fce4ec', border: '#e57373', text: '#c62828' },
+  { bg: '#e8f5e9', border: '#66bb6a', text: '#2e7d32' },
+  { bg: '#fff8e1', border: '#ffca28', text: '#e65100' },
+  { bg: '#e3f2fd', border: '#64b5f6', text: '#1565c0' },
+  { bg: '#f3e5f5', border: '#ba68c8', text: '#6a1b9a' },
+  { bg: '#e0f7fa', border: '#26c6da', text: '#00695c' },
+  { bg: '#fbe9e7', border: '#ff7043', text: '#bf360c' },
+  { bg: '#f1f8e9', border: '#9ccc65', text: '#33691e' },
+];
+
+function getProjectColor(projectId) {
+  const idx = state.projects.findIndex(p => p.id === projectId);
+  return PROJECT_COLORS[(idx < 0 ? 0 : idx) % PROJECT_COLORS.length];
+}
 
 // ============================================================
 // 유틸
@@ -669,6 +937,26 @@ function getWeekStart(dateStr) {
   return toISO(d);
 }
 
+// 반복일정에서 특정 날짜에 해당하는 가상 todo 객체 생성
+// weekday: 0=월,1=화,...,6=일 (JS getDay 기준: 0=Sun → 변환 필요)
+function getRecurringForDate(ds) {
+  const d = parseDate(ds);
+  const dow = (d.getDay() + 6) % 7; // 0=Mon, ..., 6=Sun
+  return state.recurringTodos
+    .filter(r => r.weekdays.includes(dow) && ds >= r.startDate && ds <= r.endDate)
+    .map(r => ({
+      id: `rec_${r.id}_${ds}`,
+      projectId: r.projectId,
+      title: r.title,
+      startDate: ds,
+      endDate: ds,
+      done: false,
+      order: 9999,
+      _recurring: true,
+      _recId: r.id,
+    }));
+}
+
 // ============================================================
 // GitHub Gist API
 // ============================================================
@@ -686,6 +974,7 @@ async function loadFromGist() {
       state.projects        = parsed.projects        || [];
       state.weekAssignments = parsed.weekAssignments || [];
       state.todos           = parsed.todos           || [];
+      state.recurringTodos  = parsed.recurringTodos  || [];
     }
   } catch(e) {
     console.warn('Gist 불러오기 실패:', e);
@@ -698,6 +987,7 @@ async function saveToGist() {
     projects:        state.projects,
     weekAssignments: state.weekAssignments,
     todos:           state.todos,
+    recurringTodos:  state.recurringTodos,
   };
   try {
     await fetch(`https://api.github.com/gists/${gistId}`, {
@@ -730,7 +1020,7 @@ async function createNewGist(token) {
     body: JSON.stringify({
       description: 'PwC 일정관리 데이터',
       public: false,
-      files: { 'schedule.json': { content: JSON.stringify({ projects:[], weekAssignments:[], todos:[] }, null, 2) } }
+      files: { 'schedule.json': { content: JSON.stringify({ projects:[], weekAssignments:[], todos:[], recurringTodos:[] }, null, 2) } }
     })
   });
   if (!res.ok) throw new Error('토큰이 올바르지 않거나 gist 권한이 없습니다.');
@@ -782,41 +1072,57 @@ document.getElementById('btn-setup-save').addEventListener('click', async () => 
 // 렌더링 — 패널 1
 // ============================================================
 function renderProjects() {
-  const el = document.getElementById('project-list');
+  // 추가 폼 (상단 고정)
+  const addBox = document.getElementById('project-add-box');
+  addBox.innerHTML = '';
+  const form = document.createElement('div');
+  form.className = 'add-proj-form';
+  const inp = document.createElement('input');
+  inp.type = 'text'; inp.placeholder = '프로젝트명 입력 후 Enter';
+  inp.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && inp.value.trim()) {
+      state.projects.push({ id: uuid(), clientName: inp.value.trim() });
+      inp.value = '';
+      scheduleSave(); render();
+    }
+  });
+  const btn = document.createElement('button');
+  btn.textContent = '+ 추가';
+  btn.addEventListener('click', () => {
+    if (inp.value.trim()) {
+      state.projects.push({ id: uuid(), clientName: inp.value.trim() });
+      inp.value = '';
+      scheduleSave(); render();
+    } else inp.focus();
+  });
+  form.appendChild(inp);
+  form.appendChild(btn);
+  addBox.appendChild(form);
+
+  // 프로젝트 목록 (스크롤 영역)
+  const el = document.getElementById('project-scroll');
   el.innerHTML = '';
 
   state.projects.forEach(p => {
     const div = document.createElement('div');
     div.className = 'project-item' + (state.activeProjectFilter === p.id ? ' active' : '');
-    div.innerHTML = `<span>${p.clientName}</span><button class="proj-del" data-id="${p.id}" title="삭제">✕</button>`;
-    div.addEventListener('click', (e) => {
-      if (e.target.classList.contains('proj-del')) return;
+    div.dataset.pid = p.id;
+    div.innerHTML = `<span>${p.clientName}</span>`;
+    div.addEventListener('click', () => {
       state.activeProjectFilter = (state.activeProjectFilter === p.id) ? null : p.id;
       render();
     });
-    div.querySelector('.proj-del').addEventListener('click', () => {
-      if (!confirm(`"${p.clientName}" 프로젝트를 삭제할까요? 관련 Todo도 모두 삭제됩니다.`)) return;
-      state.projects = state.projects.filter(x => x.id !== p.id);
-      state.todos = state.todos.filter(x => x.projectId !== p.id);
-      state.weekAssignments = state.weekAssignments.filter(x => x.projectId !== p.id);
-      if (state.activeProjectFilter === p.id) state.activeProjectFilter = null;
-      scheduleSave(); render();
-    });
+    attachProjectCtx(div, p);
     el.appendChild(div);
   });
-
-  const addBtn = document.createElement('button');
-  addBtn.className = 'add-btn';
-  addBtn.textContent = '+ 프로젝트 추가';
-  addBtn.addEventListener('click', () => openModal('modal-project'));
-  el.appendChild(addBtn);
+  enableProjectDragSort(el);
 }
 
 // ============================================================
 // 렌더링 — 패널 2
 // ============================================================
 function renderTodos() {
-  const el = document.getElementById('todo-list');
+  const el = document.getElementById('todo-scroll');
   el.innerHTML = '';
 
   const filteredProjects = state.activeProjectFilter
@@ -829,77 +1135,102 @@ function renderTodos() {
       .sort((a,b) => (a.order||0) - (b.order||0));
     if (todos.length === 0 && !state.activeProjectFilter) return;
 
+    const color = getProjectColor(p.id);
     const group = document.createElement('div');
     group.className = 'todo-group';
-    group.innerHTML = `<div class="todo-group-label">${p.clientName}</div>`;
+    const lbl = document.createElement('div');
+    lbl.className = 'todo-group-label';
+    lbl.textContent = `■ ${p.clientName}`;
+    lbl.style.background = color.bg;
+    lbl.style.color = color.text;
+    lbl.style.borderLeft = `3px solid ${color.border}`;
+    group.appendChild(lbl);
 
-    todos.forEach(t => {
+    // 패널 2에는 원본(parentId 없는) todo만 표시
+    const originTodos = todos.filter(t => !t.parentId);
+    originTodos.forEach(t => {
+      // 패널 3에 배정된 인스턴스 수 (자기 자신 + 복사본)
+      const instances = state.todos.filter(x => x.startDate && (x.id === t.id || x.parentId === t.id));
+      const instCount = instances.length;
+      // 패널 2 체크: 모든 인스턴스가 완료여야 체크
+      const allDone = instCount > 0 && instances.every(x => x.done);
+
       const item = document.createElement('div');
-      item.className = 'todo-item' + (!t.startDate ? ' unscheduled' : '') + (t.done ? ' done-item' : '');
+      item.className = 'todo-item' + (allDone ? ' done-item' : '');
+      item.style.borderLeft = `3px solid ${color.border}`;
       item.draggable = true;
       item.dataset.id = t.id;
+
+      const needSchedule = !t.startDate && instCount === 0;
       item.innerHTML = `
-        <input type="checkbox" ${t.done ? 'checked' : ''}>
-        <span class="todo-title">${t.title}</span>
-        <button class="todo-del" title="삭제">✕</button>
+        ${needSchedule ? '<span class="need-schedule">[일정반영필요]</span>' : ''}
+        <div class="todo-item-row">
+          <input type="checkbox" ${allDone ? 'checked' : ''}>
+          ${instCount > 0 ? `<span class="todo-count-badge">${instCount}</span>` : ''}
+          <span class="todo-title">${t.title}</span>
+          <button class="todo-del" title="삭제">✕</button>
+        </div>
       `;
       item.querySelector('input').addEventListener('change', (e) => {
-        t.done = e.target.checked;
+        const checked = e.target.checked;
+        // 원본 + 복사본 모두 done 상태 변경
+        state.todos.forEach(x => { if (x.id === t.id || x.parentId === t.id) x.done = checked; });
         scheduleSave(); render();
       });
       item.querySelector('.todo-del').addEventListener('click', () => {
-        state.todos = state.todos.filter(x => x.id !== t.id);
+        // 원본 + 복사본 모두 삭제
+        state.todos = state.todos.filter(x => x.id !== t.id && x.parentId !== t.id);
         scheduleSave(); render();
       });
-      item.addEventListener('dragstart', (e) => {
-        state.draggingTodoId = t.id;
-        e.dataTransfer.effectAllowed = 'move';
-      });
       item.addEventListener('dragend', () => { state.draggingTodoId = null; });
+      attachTodoCtx(item, t);
       group.appendChild(item);
     });
+    enableTodoDragSort(group, p.id);
 
     el.appendChild(group);
   });
 
-  // Todo 추가 폼
-  const form = document.createElement('div');
-  form.className = 'add-todo-form';
-  const sel = document.createElement('select');
-  sel.id = 'inline-todo-project';
-  state.projects.forEach(p => {
-    const opt = document.createElement('option');
-    opt.value = p.id; opt.textContent = p.clientName;
-    sel.appendChild(opt);
-  });
-  if (state.activeProjectFilter) sel.value = state.activeProjectFilter;
-
-  const inp = document.createElement('input');
-  inp.type = 'text'; inp.placeholder = '업무 내용 입력 후 Enter';
-  inp.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && inp.value.trim()) {
-      addTodo(sel.value, inp.value.trim());
-      inp.value = '';
-    }
-  });
-
-  const btn = document.createElement('button');
-  btn.textContent = '+ Todo 추가';
-  btn.addEventListener('click', () => {
-    if (inp.value.trim()) { addTodo(sel.value, inp.value.trim()); inp.value = ''; }
-    else inp.focus();
-  });
-
+  // Todo 추가 폼 (상단 고정 영역에 렌더링)
+  const addBox = document.getElementById('todo-add-box');
+  addBox.innerHTML = '';
   if (state.projects.length > 0) {
+    const form = document.createElement('div');
+    form.className = 'add-todo-form';
+    const sel = document.createElement('select');
+    sel.id = 'inline-todo-project';
+    state.projects.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.id; opt.textContent = p.clientName;
+      sel.appendChild(opt);
+    });
+    if (state.activeProjectFilter) sel.value = state.activeProjectFilter;
+
+    const inp = document.createElement('input');
+    inp.type = 'text'; inp.placeholder = '업무 내용 입력 후 Enter';
+    inp.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && inp.value.trim()) {
+        addTodo(sel.value, inp.value.trim());
+        inp.value = '';
+      }
+    });
+
+    const btn = document.createElement('button');
+    btn.textContent = '+ Todo 추가';
+    btn.addEventListener('click', () => {
+      if (inp.value.trim()) { addTodo(sel.value, inp.value.trim()); inp.value = ''; }
+      else inp.focus();
+    });
+
     form.appendChild(sel);
     form.appendChild(inp);
     form.appendChild(btn);
-    el.appendChild(form);
+    addBox.appendChild(form);
   } else {
     const msg = document.createElement('p');
     msg.style.cssText = 'font-size:0.8rem; color:var(--text-muted); padding:8px 0;';
     msg.textContent = '먼저 프로젝트를 추가해주세요.';
-    el.appendChild(msg);
+    addBox.appendChild(msg);
   }
 }
 
@@ -924,7 +1255,7 @@ function renderCalendar() {
   // 요일 헤더
   const hdr = document.createElement('div');
   hdr.className = 'cal-header';
-  ['일','월','화','수','목','금','토'].forEach(d => {
+  ['월','화','수','목','금','토','일'].forEach(d => {
     const c = document.createElement('div');
     c.className = 'cal-header-cell';
     c.textContent = d;
@@ -935,10 +1266,10 @@ function renderCalendar() {
   // 첫날 ~ 마지막날
   const firstDay = new Date(y, m, 1);
   const lastDay  = new Date(y, m+1, 0);
-  const startDow = firstDay.getDay(); // 0=Sun
+  const startDow = (firstDay.getDay() + 6) % 7; // 0=Mon, 6=Sun
   const todayStr = toISO(new Date());
 
-  // 캘린더 시작일 (이전 달 채우기)
+  // 캘린더 시작일 (이전 달 채우기, 월요일 기준)
   const calStart = new Date(y, m, 1 - startDow);
 
   // 총 주 수
@@ -961,14 +1292,12 @@ function renderCalendar() {
       weekDates.push(toISO(dt));
     }
 
-    // 주간 assign 블록이 있는 클라이언트 (이 주에)
-    const weekMon = weekDates[1]; // 월요일
-    const weekFri = weekDates[5]; // 금요일
+    // 이 주의 평일 범위
+    const weekMon = weekDates[0]; // 월요일 (di=0)
+    const weekFri = weekDates[4]; // 금요일 (di=4)
+    // 이 주에 걸치는 배정 (평일 기준)
     const assignsThisWeek = state.weekAssignments
-      .filter(a => {
-        // weekStart가 이 주 내 날짜인지
-        return a.weekStart >= weekSundayStr && a.weekStart <= weekDates[6];
-      })
+      .filter(a => a.startDate && a.endDate && a.startDate <= weekFri && a.endDate >= weekMon)
       .sort((a,b) => (a.order||0)-(b.order||0));
 
     // 날짜 그리드
@@ -980,8 +1309,8 @@ function renderCalendar() {
       cell.className = 'day-cell';
       if (ds < dateStr(y,m,1) || ds > dateStr(y,m,lastDay.getDate())) cell.classList.add('other-month');
       if (ds === todayStr) cell.classList.add('today');
-      if (di === 0) cell.classList.add('sunday');
-      if (di === 6) cell.classList.add('saturday');
+      if (di === 6) cell.classList.add('sunday');
+      if (di === 5) cell.classList.add('saturday');
       cell.dataset.date = ds;
 
       // 날짜 숫자
@@ -989,54 +1318,6 @@ function renderCalendar() {
       dayNum.className = 'day-num';
       dayNum.textContent = parseDate(ds).getDate();
       cell.appendChild(dayNum);
-
-      // 클라이언트 주간 assign 블록 (평일에만)
-      if (di >= 1 && di <= 5) {
-        assignsThisWeek.forEach(a => {
-          const proj = state.projects.find(p => p.id === a.projectId);
-          if (!proj) return;
-          const ab = document.createElement('div');
-          ab.className = 'assign-block';
-          ab.innerHTML = `<span>${proj.clientName}</span><button class="del-assign" data-aid="${a.id}" title="삭제">✕</button>`;
-          ab.querySelector('.del-assign').addEventListener('click', (e) => {
-            e.stopPropagation();
-            state.weekAssignments = state.weekAssignments.filter(x => x.id !== a.id);
-            scheduleSave(); render();
-          });
-          cell.appendChild(ab);
-        });
-      }
-
-      // Todo 블록
-      const todosForDay = state.todos
-        .filter(t => t.startDate && isBetween(ds, t.startDate, t.endDate || t.startDate))
-        .sort((a,b) => {
-          const pa = state.projects.findIndex(p => p.id === a.projectId);
-          const pb = state.projects.findIndex(p => p.id === b.projectId);
-          if (pa !== pb) return pa - pb;
-          return (a.order||0) - (b.order||0);
-        });
-
-      todosForDay.forEach(t => {
-        const proj = state.projects.find(p => p.id === t.projectId);
-        const block = document.createElement('div');
-        block.className = 'cal-todo-block' + (t.done ? ' done-block' : '');
-        block.innerHTML = `
-          <input type="checkbox" ${t.done ? 'checked' : ''} title="완료 처리">
-          <span class="cal-todo-title" title="${t.title}">${t.title}</span>
-          <button class="cal-todo-del" title="일정에서 제거">✕</button>
-        `;
-        if (proj) block.title = `[${proj.clientName}] ${t.title}`;
-        block.querySelector('input').addEventListener('change', (e) => {
-          t.done = e.target.checked;
-          scheduleSave(); render();
-        });
-        block.querySelector('.cal-todo-del').addEventListener('click', () => {
-          t.startDate = null; t.endDate = null;
-          scheduleSave(); render();
-        });
-        cell.appendChild(block);
-      });
 
       // 드롭 영역
       cell.addEventListener('dragover', (e) => {
@@ -1050,11 +1331,53 @@ function renderCalendar() {
         if (!state.draggingTodoId) return;
         const todo = state.todos.find(t => t.id === state.draggingTodoId);
         if (todo) {
-          todo.startDate = ds;
-          todo.endDate   = ds;
+          if (state.draggingFromCalendar) {
+            if (state.ctrlDragging) {
+              // Ctrl+드래그: 복사 인스턴스 생성
+              const originId = todo.parentId || todo.id;
+              const duration = todo.endDate ? Math.round((parseDate(todo.endDate) - parseDate(todo.startDate)) / 86400000) : 0;
+              const copy = { id: uuid(), projectId: todo.projectId, title: todo.title, parentId: originId, startDate: ds, endDate: addDays(ds, duration), done: false, order: todo.order };
+              state.todos.push(copy);
+            } else {
+              // 일반 이동
+              const duration = todo.endDate ? Math.round((parseDate(todo.endDate) - parseDate(todo.startDate)) / 86400000) : 0;
+              todo.startDate = ds;
+              todo.endDate = addDays(ds, duration);
+            }
+          } else {
+            // 패널 2 → 캘린더: 원본에 이미 startDate가 있으면 새 복사본 생성, 없으면 원본에 배정
+            const originId = todo.parentId || todo.id;
+            const alreadyScheduled = todo.startDate;
+            if (alreadyScheduled) {
+              const copy = { id: uuid(), projectId: todo.projectId, title: todo.title, parentId: originId, startDate: ds, endDate: ds, done: false, order: todo.order };
+              state.todos.push(copy);
+            } else {
+              todo.startDate = ds;
+              todo.endDate   = ds;
+            }
+          }
           scheduleSave(); render();
         }
         state.draggingTodoId = null;
+        state.draggingFromCalendar = false;
+        state.ctrlDragging = false;
+      });
+      // 리사이즈 mouseover
+      cell.addEventListener('mouseover', () => {
+        if (state.resizingTodoId) {
+          const todo = state.todos.find(t => t.id === state.resizingTodoId);
+          if (todo && ds >= todo.startDate) {
+            todo.endDate = ds;
+            render();
+          }
+        }
+        if (state.resizingAssignId) {
+          const assign = state.weekAssignments.find(a => a.id === state.resizingAssignId);
+          if (assign && ds >= assign.startDate) {
+            assign.endDate = ds;
+            render();
+          }
+        }
       });
 
       grid.appendChild(cell);
@@ -1062,111 +1385,130 @@ function renderCalendar() {
 
     weekRow.appendChild(grid);
 
-    // 주차 확장 버튼
-    const expandBtn = document.createElement('button');
-    expandBtn.className = 'week-expand-btn';
-    const isExpanded = state.expandedWeeks.has(weekSundayStr);
-    expandBtn.textContent = isExpanded
-      ? `${w+1}주차 접기 ▲`
-      : `${w+1}주차 자세히 보기 ▼`;
-    expandBtn.addEventListener('click', () => {
-      if (state.expandedWeeks.has(weekSundayStr)) {
-        state.expandedWeeks.delete(weekSundayStr);
-      } else {
-        state.expandedWeeks.add(weekSundayStr);
-      }
-      render();
+    // ── span overlay (assign + todo bars) ──────────────────────
+    // CSS calc 위치 계산: 7열, gap=2px
+    // col i의 left = calc(i * (100% + 2px) / 7)
+    // n열 span의 width = calc(n * (100% + 2px) / 7 - 2px)
+    // top 기준: 날짜숫자 영역 = 24px, 블록높이 = 20px, 블록간격 = 2px
+    const spanLayer = document.createElement('div');
+    spanLayer.className = 'span-layer';
+
+    const weekdays = [weekDates[0],weekDates[1],weekDates[2],weekDates[3],weekDates[4]];
+    const DAY_NUM_H = 24;
+    const BAR_H = 20;
+    const BAR_GAP = 2;
+
+    // assign 바
+    assignsThisWeek.forEach((a, ai) => {
+      const proj = state.projects.find(p => p.id === a.projectId);
+      if (!proj) return;
+      const firstCol = weekdays.findIndex(d => d >= a.startDate && d <= a.endDate);
+      if (firstCol < 0) return;
+      const lastCol  = weekdays.reduce((acc, d, i) => (d >= a.startDate && d <= a.endDate ? i : acc), firstCol);
+      const colSpan  = lastCol - firstCol + 1;
+      const rangeLabel = `${a.startDate.slice(5)} ~ ${a.endDate.slice(5)}`;
+      const bar = document.createElement('div');
+      bar.className = 'span-bar assign-bar';
+      bar.style.left  = `calc(${firstCol} * (100% + 2px) / 7)`;
+      bar.style.width = `calc(${colSpan} * (100% + 2px) / 7 - 2px)`;
+      bar.style.top   = `${DAY_NUM_H + ai * (BAR_H + BAR_GAP)}px`;
+      bar.innerHTML = `<span style="flex:1;word-break:break-word">${proj.clientName} <small style="font-weight:400;opacity:0.7">${rangeLabel}</small></span><button class="del-assign" title="삭제">✕</button><div class="assign-resize-handle" data-aid="${a.id}">⋮</div>`;
+      bar.querySelector('.del-assign').addEventListener('click', (e) => {
+        e.stopPropagation();
+        state.weekAssignments = state.weekAssignments.filter(x => x.id !== a.id);
+        scheduleSave(); render();
+      });
+      bar.querySelector('.assign-resize-handle').addEventListener('mousedown', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        state.resizingAssignId = a.id;
+      });
+      attachAssignCtx(bar, a);
+      spanLayer.appendChild(bar);
     });
-    weekRow.appendChild(expandBtn);
 
-    // 주차 확장 뷰
-    if (isExpanded) {
-      const detail = document.createElement('div');
-      detail.className = 'week-detail';
-
-      const dh = document.createElement('div');
-      dh.className = 'week-detail-header';
-      const labels = ['일','월','화','수','목','금','토'];
-      dh.innerHTML = `<span>${w+1}주차 (${weekDates[0].slice(5)} ~ ${weekDates[6].slice(5)})</span>
-        <button onclick="collapseWeek('${weekSundayStr}')">접기 ▲</button>`;
-      detail.appendChild(dh);
-
-      const dg = document.createElement('div');
-      dg.className = 'week-detail-grid';
-
-      weekDates.forEach((ds, di) => {
-        const dc = document.createElement('div');
-        dc.className = 'week-detail-cell';
-        dc.dataset.date = ds;
-
-        const lbl = document.createElement('div');
-        lbl.className = 'day-label';
-        lbl.textContent = `${labels[di]} ${parseDate(ds).getDate()}일`;
-        if (di === 0) lbl.style.color = '#c0392b';
-        if (di === 6) lbl.style.color = '#2980b9';
-        dc.appendChild(lbl);
-
-        // assign 블록 (평일)
-        if (di >= 1 && di <= 5) {
-          assignsThisWeek.forEach(a => {
-            const proj = state.projects.find(p => p.id === a.projectId);
-            if (!proj) return;
-            const ab = document.createElement('div');
-            ab.className = 'assign-block';
-            ab.innerHTML = `<span>${proj.clientName}</span>`;
-            dc.appendChild(ab);
-          });
-        }
-
-        // Todo 블록
-        const todosForDay = state.todos
-          .filter(t => t.startDate && isBetween(ds, t.startDate, t.endDate || t.startDate))
-          .sort((a,b) => {
-            const pa = state.projects.findIndex(p => p.id === a.projectId);
-            const pb = state.projects.findIndex(p => p.id === b.projectId);
-            if (pa !== pb) return pa - pb;
-            return (a.order||0) - (b.order||0);
-          });
-
-        todosForDay.forEach(t => {
-          const block = document.createElement('div');
-          block.className = 'cal-todo-block' + (t.done ? ' done-block' : '');
-          block.innerHTML = `
-            <input type="checkbox" ${t.done ? 'checked' : ''}>
-            <span class="cal-todo-title" title="${t.title}">${t.title}</span>
-          `;
-          block.querySelector('input').addEventListener('change', (e) => {
-            t.done = e.target.checked;
-            scheduleSave(); render();
-          });
-          dc.appendChild(block);
-        });
-
-        // 드롭 영역
-        dc.addEventListener('dragover', e => { e.preventDefault(); dc.style.background = '#eff6ff'; });
-        dc.addEventListener('dragleave', () => { dc.style.background = ''; });
-        dc.addEventListener('drop', e => {
-          e.preventDefault(); dc.style.background = '';
-          if (!state.draggingTodoId) return;
-          const todo = state.todos.find(t => t.id === state.draggingTodoId);
-          if (todo) { todo.startDate = ds; todo.endDate = ds; scheduleSave(); render(); }
-          state.draggingTodoId = null;
-        });
-
-        dg.appendChild(dc);
+    // todo 바 (일반 + 반복일정)
+    const recurringThisWeek = [];
+    weekDates.forEach(ds => {
+      getRecurringForDate(ds).forEach(r => recurringThisWeek.push(r));
+    });
+    const todosThisWeek = [
+      ...state.todos.filter(t => t.startDate && t.startDate <= weekDates[6] && (t.endDate || t.startDate) >= weekDates[0]),
+      ...recurringThisWeek,
+    ].sort((a,b) => {
+        const pa = state.projects.findIndex(p => p.id === a.projectId);
+        const pb = state.projects.findIndex(p => p.id === b.projectId);
+        if (pa !== pb) return pa - pb;
+        return (a.order||0) - (b.order||0);
       });
 
-      detail.appendChild(dg);
-      weekRow.appendChild(detail);
-    }
+    const assignBarCount = assignsThisWeek.length;
+    todosThisWeek.forEach((t, ti) => {
+      const color = getProjectColor(t.projectId);
+      const proj  = state.projects.find(p => p.id === t.projectId);
+      // 이 주에서 시작/끝 col 계산 (0~6, 토일 포함)
+      const tEnd = t.endDate || t.startDate;
+      const firstCol = weekDates.findIndex(d => d >= t.startDate && d <= tEnd);
+      if (firstCol < 0) return;
+      const lastCol  = weekDates.reduce((acc, d, i) => (d >= t.startDate && d <= tEnd ? i : acc), firstCol);
+      const colSpan  = lastCol - firstCol + 1;
+      const topPx = DAY_NUM_H + assignBarCount * (BAR_H + BAR_GAP) + ti * (BAR_H + BAR_GAP);
+
+      const bar = document.createElement('div');
+      bar.className = 'span-bar todo-bar' + (t.done ? ' done-block' : '');
+      if (!t.done) {
+        bar.style.background = color.bg;
+        bar.style.borderLeftColor = color.border;
+      }
+      bar.style.left  = `calc(${firstCol} * (100% + 2px) / 7)`;
+      bar.style.width = `calc(${colSpan} * (100% + 2px) / 7 - 2px)`;
+      bar.style.top   = `${topPx}px`;
+      const projName = proj ? proj.clientName : '';
+      bar.innerHTML = `
+        <input type="checkbox" ${t.done ? 'checked' : ''} title="완료 처리">
+        ${projName ? `<span style="font-size:0.60rem;font-weight:700;opacity:0.7;flex-shrink:0">[${projName}]</span>` : ''}
+        <span class="span-todo-title" title="${t.title}">${t.title}</span>
+        ${t._recurring ? '<span style="font-size:0.58rem;color:#888;flex-shrink:0">↺</span>' : `<button class="cal-todo-del" title="일정에서 제거">✕</button>`}
+        ${!t._recurring ? `<div class="resize-handle" data-tid="${t.id}">⋮</div>` : ''}
+      `;
+      bar.querySelector('input').addEventListener('change', (e) => {
+        if (!t._recurring) {
+          t.done = e.target.checked;
+          scheduleSave(); render();
+        }
+      });
+      if (!t._recurring) {
+        bar.querySelector('.cal-todo-del').addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (t.parentId) {
+            state.todos = state.todos.filter(x => x.id !== t.id);
+          } else {
+            t.startDate = null; t.endDate = null;
+          }
+          scheduleSave(); render();
+        });
+        bar.draggable = true;
+        bar.addEventListener('dragstart', (e) => {
+          if (e.target.classList.contains('resize-handle')) { e.preventDefault(); return; }
+          state.draggingTodoId = t.id;
+          state.draggingFromCalendar = true;
+          state.ctrlDragging = e.ctrlKey;
+          e.dataTransfer.effectAllowed = e.ctrlKey ? 'copy' : 'move';
+        });
+        bar.addEventListener('dragend', () => { state.draggingFromCalendar = false; state.ctrlDragging = false; });
+        bar.querySelector('.resize-handle').addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          state.resizingTodoId = t.id;
+        });
+        attachBarCtx(bar, t);
+      }
+      spanLayer.appendChild(bar);
+    });
+
+    weekRow.appendChild(spanLayer);
 
     el.appendChild(weekRow);
   }
-}
-
-function collapseWeek(weekStr) {
-  state.expandedWeeks.delete(weekStr);
-  render();
 }
 
 // ============================================================
@@ -1202,11 +1544,10 @@ document.getElementById('btn-save-todo').addEventListener('click', () => {
   closeModal('modal-todo');
 });
 
-// 기본 assign 모달
+// 프로젝트 배정 모달
 document.getElementById('btn-add-assign').addEventListener('click', () => {
   if (state.projects.length === 0) { alert('먼저 프로젝트를 추가해주세요.'); return; }
 
-  // 클라이언트 선택
   const pSel = document.getElementById('select-assign-project');
   pSel.innerHTML = '';
   state.projects.forEach(p => {
@@ -1215,49 +1556,111 @@ document.getElementById('btn-add-assign').addEventListener('click', () => {
     pSel.appendChild(opt);
   });
 
-  // 주 선택: 현재 월의 주 목록
-  const wSel = document.getElementById('select-assign-week');
-  wSel.innerHTML = '';
-  const y = state.currentYear, m = state.currentMonth;
-  const firstDay = new Date(y, m, 1);
-  const lastDay  = new Date(y, m+1, 0);
-  const startDow = firstDay.getDay();
-  const calStart = new Date(y, m, 1 - startDow);
-  const totalWeeks = Math.ceil((startDow + lastDay.getDate()) / 7);
-  const labels = ['일','월','화','수','목','금','토'];
-
-  for (let w = 0; w < totalWeeks; w++) {
-    const weekSun = new Date(calStart);
-    weekSun.setDate(calStart.getDate() + w * 7);
-    const weekSunStr = toISO(weekSun);
-    const weekDates = [];
-    for (let d = 0; d < 7; d++) {
-      const dt = new Date(weekSun); dt.setDate(weekSun.getDate() + d);
-      weekDates.push(toISO(dt));
-    }
-    const opt = document.createElement('option');
-    opt.value = weekSunStr;
-    opt.textContent = `${w+1}주차 (${weekDates[0].slice(5)} ~ ${weekDates[6].slice(5)})`;
-    wSel.appendChild(opt);
-  }
+  // 기본 날짜: 오늘 기준
+  const today = toISO(new Date());
+  document.getElementById('input-assign-start').value = today;
+  document.getElementById('input-assign-end').value = today;
 
   openModal('modal-assign');
 });
 
 document.getElementById('btn-save-assign').addEventListener('click', () => {
   const projectId  = document.getElementById('select-assign-project').value;
-  const weekStart  = document.getElementById('select-assign-week').value;
-  if (!projectId || !weekStart) return;
+  const startDate  = document.getElementById('input-assign-start').value;
+  const endDate    = document.getElementById('input-assign-end').value;
+  if (!projectId || !startDate || !endDate) { alert('프로젝트, 시작일, 종료일을 모두 입력해주세요.'); return; }
+  if (endDate < startDate) { alert('종료일이 시작일보다 빠릅니다.'); return; }
 
-  // 중복 체크
-  const exists = state.weekAssignments.find(a => a.projectId === projectId && a.weekStart === weekStart);
-  if (exists) { alert('이미 배정되어 있습니다.'); return; }
-
-  const maxOrder = state.weekAssignments
-    .filter(a => a.weekStart === weekStart)
-    .reduce((m,a) => Math.max(m, a.order||0), -1);
-  state.weekAssignments.push({ id: uuid(), projectId, weekStart, order: maxOrder+1 });
+  const maxOrder = state.weekAssignments.reduce((m,a) => Math.max(m, a.order||0), -1);
+  state.weekAssignments.push({ id: uuid(), projectId, startDate, endDate, order: maxOrder+1 });
   closeModal('modal-assign');
+  scheduleSave(); render();
+});
+
+// 반복일정 추가 모달 열기
+function openRecurringModal() {
+  if (state.projects.length === 0) { alert('먼저 프로젝트를 추가해주세요.'); return; }
+  const pSel = document.getElementById('select-recurring-project');
+  pSel.innerHTML = '';
+  state.projects.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p.id; opt.textContent = p.clientName;
+    pSel.appendChild(opt);
+  });
+  if (state.activeProjectFilter) pSel.value = state.activeProjectFilter;
+  document.getElementById('input-recurring-title').value = '';
+  document.getElementById('recurring-weekdays').querySelectorAll('input').forEach(cb => { cb.checked = false; });
+  const today = toISO(new Date());
+  document.getElementById('input-recurring-start').value = today;
+  document.getElementById('input-recurring-end').value = today;
+  openModal('modal-recurring');
+}
+
+document.getElementById('btn-save-recurring').addEventListener('click', () => {
+  const projectId = document.getElementById('select-recurring-project').value;
+  const title     = document.getElementById('input-recurring-title').value.trim();
+  const startDate = document.getElementById('input-recurring-start').value;
+  const endDate   = document.getElementById('input-recurring-end').value;
+  const weekdays  = Array.from(document.getElementById('recurring-weekdays').querySelectorAll('input:checked')).map(cb => Number(cb.value));
+  if (!projectId || !title || !startDate || !endDate || weekdays.length === 0) {
+    alert('모든 항목을 입력하고 요일을 1개 이상 선택해주세요.'); return;
+  }
+  if (endDate < startDate) { alert('종료일이 시작일보다 빠릅니다.'); return; }
+  state.recurringTodos.push({ id: uuid(), projectId, title, weekdays, startDate, endDate });
+  closeModal('modal-recurring');
+  scheduleSave(); render();
+});
+
+// 반복일정 삭제 모달 열기
+function openRecurringDelModal() {
+  const sel = document.getElementById('select-recurring-del');
+  sel.innerHTML = '';
+  if (state.recurringTodos.length === 0) { alert('등록된 반복일정이 없습니다.'); return; }
+  const all = document.createElement('option');
+  all.value = 'ALL'; all.textContent = '전체 반복일정';
+  sel.appendChild(all);
+  state.recurringTodos.forEach(r => {
+    const proj = state.projects.find(p => p.id === r.projectId);
+    const opt = document.createElement('option');
+    opt.value = r.id;
+    opt.textContent = `[${proj ? proj.clientName : '?'}] ${r.title} (${r.startDate}~${r.endDate})`;
+    sel.appendChild(opt);
+  });
+  const today = toISO(new Date());
+  document.getElementById('input-recurring-del-start').value = today;
+  document.getElementById('input-recurring-del-end').value = today;
+  openModal('modal-recurring-del');
+}
+
+document.getElementById('btn-confirm-recurring-del').addEventListener('click', () => {
+  const selId    = document.getElementById('select-recurring-del').value;
+  const delStart = document.getElementById('input-recurring-del-start').value;
+  const delEnd   = document.getElementById('input-recurring-del-end').value;
+  if (!delStart || !delEnd) { alert('삭제 기간을 입력해주세요.'); return; }
+  if (delEnd < delStart) { alert('종료일이 시작일보다 빠릅니다.'); return; }
+
+  // 해당 반복일정의 기간을 분할/축소하거나 완전 삭제
+  const targets = selId === 'ALL' ? state.recurringTodos : state.recurringTodos.filter(r => r.id === selId);
+  const remaining = [];
+  state.recurringTodos.forEach(r => {
+    if (!targets.includes(r)) { remaining.push(r); return; }
+    // delStart~delEnd 범위를 제거
+    if (r.endDate < delStart || r.startDate > delEnd) {
+      remaining.push(r); // 완전 범위 밖 → 유지
+    } else {
+      // 앞부분 유지
+      if (r.startDate < delStart) {
+        remaining.push({ ...r, id: uuid(), endDate: addDays(delStart, -1) });
+      }
+      // 뒷부분 유지
+      if (r.endDate > delEnd) {
+        remaining.push({ ...r, id: uuid(), startDate: addDays(delEnd, 1) });
+      }
+      // 완전히 범위 안에 있으면 아무것도 추가 안 함 (삭제)
+    }
+  });
+  state.recurringTodos = remaining;
+  closeModal('modal-recurring-del');
   scheduleSave(); render();
 });
 
@@ -1265,15 +1668,16 @@ document.getElementById('btn-save-assign').addEventListener('click', () => {
 document.getElementById('btn-prev-month').addEventListener('click', () => {
   if (state.currentMonth === 0) { state.currentMonth = 11; state.currentYear--; }
   else state.currentMonth--;
-  state.expandedWeeks.clear();
   render();
 });
 document.getElementById('btn-next-month').addEventListener('click', () => {
   if (state.currentMonth === 11) { state.currentMonth = 0; state.currentYear++; }
   else state.currentMonth++;
-  state.expandedWeeks.clear();
   render();
 });
+
+document.getElementById('btn-add-recurring').addEventListener('click', () => openRecurringModal());
+document.getElementById('btn-del-recurring').addEventListener('click', () => openRecurringDelModal());
 
 // 모달 외부 클릭 닫기
 document.querySelectorAll('.modal-overlay').forEach(overlay => {
@@ -1292,6 +1696,280 @@ function render() {
 }
 
 // ============================================================
+// 컨텍스트 메뉴
+// ============================================================
+const ctxMenu = document.getElementById('ctx-menu');
+let ctxTarget = null; // { type: 'project'|'todo'|'bar', id }
+
+function showCtxMenu(e, items) {
+  e.preventDefault();
+  ctxMenu.innerHTML = '';
+  items.forEach(item => {
+    const el = document.createElement('div');
+    el.className = 'ctx-item' + (item.danger ? ' danger' : '');
+    el.textContent = item.label;
+    el.addEventListener('click', () => { hideCtxMenu(); item.action(); });
+    ctxMenu.appendChild(el);
+  });
+  ctxMenu.classList.add('show');
+  const x = Math.min(e.clientX, window.innerWidth - ctxMenu.offsetWidth - 10);
+  const y = Math.min(e.clientY, window.innerHeight - ctxMenu.offsetHeight - 10);
+  ctxMenu.style.left = x + 'px';
+  ctxMenu.style.top  = y + 'px';
+}
+function hideCtxMenu() { ctxMenu.classList.remove('show'); }
+document.addEventListener('click', hideCtxMenu);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') hideCtxMenu(); });
+
+// 패널 1 프로젝트 우클릭
+function attachProjectCtx(el, p) {
+  el.addEventListener('contextmenu', e => {
+    showCtxMenu(e, [
+      { label: '수정', action: () => openEditProjectModal(p.id) },
+      { label: '삭제', danger: true, action: () => deleteProject(p.id) },
+    ]);
+  });
+}
+
+function openEditProjectModal(pid) {
+  const p = state.projects.find(x => x.id === pid);
+  if (!p) return;
+  document.getElementById('input-edit-project-name').value = p.clientName;
+  const btn = document.getElementById('btn-save-edit-project');
+  btn.onclick = () => {
+    const name = document.getElementById('input-edit-project-name').value.trim();
+    if (!name) return;
+    p.clientName = name;
+    closeModal('modal-edit-project');
+    scheduleSave(); render();
+  };
+  openModal('modal-edit-project');
+}
+
+function deleteProject(pid) {
+  const p = state.projects.find(x => x.id === pid);
+  if (!p || !confirm(`"${p.clientName}" 프로젝트를 삭제할까요?`)) return;
+  state.projects = state.projects.filter(x => x.id !== pid);
+  state.todos = state.todos.filter(x => x.projectId !== pid);
+  state.weekAssignments = state.weekAssignments.filter(x => x.projectId !== pid);
+  if (state.activeProjectFilter === pid) state.activeProjectFilter = null;
+  scheduleSave(); render();
+}
+
+// 패널 2 todo 우클릭
+function attachTodoCtx(el, t) {
+  el.addEventListener('contextmenu', e => {
+    e.stopPropagation();
+    showCtxMenu(e, [
+      { label: '수정', action: () => openEditTodoModal(t.id) },
+      { label: '삭제', danger: true, action: () => {
+        state.todos = state.todos.filter(x => x.id !== t.id && x.parentId !== t.id);
+        scheduleSave(); render();
+      }},
+    ]);
+  });
+}
+
+function openEditTodoModal(tid) {
+  const t = state.todos.find(x => x.id === tid);
+  if (!t) return;
+  const sel = document.getElementById('select-edit-todo-project');
+  sel.innerHTML = '';
+  state.projects.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p.id; opt.textContent = p.clientName;
+    sel.appendChild(opt);
+  });
+  sel.value = t.projectId;
+  document.getElementById('input-edit-todo-title').value = t.title;
+  const btn = document.getElementById('btn-save-edit-todo');
+  btn.onclick = () => {
+    const title = document.getElementById('input-edit-todo-title').value.trim();
+    const projectId = sel.value;
+    if (!title) return;
+    // 원본 + 복사본 모두 업데이트
+    state.todos.forEach(x => {
+      if (x.id === tid || x.parentId === tid) { x.title = title; x.projectId = projectId; }
+    });
+    closeModal('modal-edit-todo');
+    scheduleSave(); render();
+  };
+  openModal('modal-edit-todo');
+}
+
+// 패널 3 assign bar 우클릭
+function attachAssignCtx(el, a) {
+  el.addEventListener('contextmenu', e => {
+    e.stopPropagation();
+    showCtxMenu(e, [
+      { label: '수정', action: () => openEditAssignModal(a.id) },
+      { label: '삭제', danger: true, action: () => {
+        state.weekAssignments = state.weekAssignments.filter(x => x.id !== a.id);
+        scheduleSave(); render();
+      }},
+    ]);
+  });
+}
+
+function openEditAssignModal(aid) {
+  const a = state.weekAssignments.find(x => x.id === aid);
+  if (!a) return;
+  const sel = document.getElementById('select-edit-assign-project');
+  sel.innerHTML = '';
+  state.projects.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p.id; opt.textContent = p.clientName;
+    sel.appendChild(opt);
+  });
+  sel.value = a.projectId;
+  document.getElementById('input-edit-assign-start').value = a.startDate;
+  document.getElementById('input-edit-assign-end').value = a.endDate;
+  const btn = document.getElementById('btn-save-edit-assign');
+  btn.onclick = () => {
+    const projectId = sel.value;
+    const startDate = document.getElementById('input-edit-assign-start').value;
+    const endDate   = document.getElementById('input-edit-assign-end').value;
+    if (!projectId || !startDate || !endDate) return;
+    if (endDate < startDate) { alert('종료일이 시작일보다 빠릅니다.'); return; }
+    a.projectId = projectId;
+    a.startDate = startDate;
+    a.endDate   = endDate;
+    closeModal('modal-edit-assign');
+    scheduleSave(); render();
+  };
+  openModal('modal-edit-assign');
+}
+
+// 패널 3 bar 우클릭 (todo bar용)
+function attachBarCtx(el, t) {
+  el.addEventListener('contextmenu', e => {
+    e.stopPropagation();
+    const originId = t.parentId || t.id;
+    showCtxMenu(e, [
+      { label: '내용 수정', action: () => openEditTodoModal(originId) },
+      { label: '일정에서 제거', action: () => {
+        if (t.parentId) {
+          state.todos = state.todos.filter(x => x.id !== t.id);
+        } else {
+          t.startDate = null; t.endDate = null;
+        }
+        scheduleSave(); render();
+      }},
+      { label: '완전 삭제', danger: true, action: () => {
+        state.todos = state.todos.filter(x => x.id !== originId && x.parentId !== originId);
+        scheduleSave(); render();
+      }},
+    ]);
+  });
+}
+
+// ============================================================
+// 패널 1 드래그 정렬
+// ============================================================
+function enableProjectDragSort(el) {
+  let dragSrcId = null;
+  el.querySelectorAll('.project-item').forEach(item => {
+    item.setAttribute('draggable', 'true');
+    item.addEventListener('dragstart', e => {
+      dragSrcId = item.dataset.pid;
+      e.dataTransfer.effectAllowed = 'move';
+      item.style.opacity = '0.5';
+    });
+    item.addEventListener('dragend', () => { item.style.opacity = ''; });
+    item.addEventListener('dragover', e => { e.preventDefault(); item.style.background = '#e0e8ff'; });
+    item.addEventListener('dragleave', () => { item.style.background = ''; });
+    item.addEventListener('drop', e => {
+      e.preventDefault(); item.style.background = '';
+      const tgtId = item.dataset.pid;
+      if (dragSrcId && dragSrcId !== tgtId) {
+        const srcIdx = state.projects.findIndex(p => p.id === dragSrcId);
+        const tgtIdx = state.projects.findIndex(p => p.id === tgtId);
+        if (srcIdx >= 0 && tgtIdx >= 0) {
+          const [moved] = state.projects.splice(srcIdx, 1);
+          state.projects.splice(tgtIdx, 0, moved);
+          scheduleSave(); render();
+        }
+      }
+      dragSrcId = null;
+    });
+  });
+}
+
+// ============================================================
+// 패널 2 todo 드래그 정렬 (같은 프로젝트 그룹 내에서만)
+// ============================================================
+function enableTodoDragSort(groupEl, projectId) {
+  let dragSrcId = null;
+  groupEl.querySelectorAll('.todo-item').forEach(item => {
+    item.addEventListener('dragstart', e => {
+      dragSrcId = item.dataset.id;
+      e.dataTransfer.setData('text/sort', dragSrcId);
+      e.dataTransfer.effectAllowed = 'all';
+      // 캘린더 드롭도 겸용
+      state.draggingTodoId = item.dataset.id;
+    });
+    item.addEventListener('dragover', e => {
+      if (!dragSrcId) return;
+      e.preventDefault();
+      item.style.boxShadow = '0 -2px 0 var(--primary)';
+    });
+    item.addEventListener('dragleave', () => { item.style.boxShadow = ''; });
+    item.addEventListener('drop', e => {
+      item.style.boxShadow = '';
+      const src = e.dataTransfer.getData('text/sort');
+      if (!src || src === item.dataset.id) { dragSrcId = null; return; }
+      const srcTodo = state.todos.find(t => t.id === src && t.projectId === projectId);
+      const tgtTodo = state.todos.find(t => t.id === item.dataset.id && t.projectId === projectId);
+      if (!srcTodo || !tgtTodo) { dragSrcId = null; return; }
+      const srcOrd = srcTodo.order ?? 0;
+      srcTodo.order = tgtTodo.order ?? 0;
+      tgtTodo.order = srcOrd;
+      dragSrcId = null;
+      scheduleSave(); render();
+    });
+    item.addEventListener('dragend', () => { dragSrcId = null; item.style.boxShadow = ''; });
+  });
+}
+
+// ============================================================
+// 패널 2-3 리사이저
+// ============================================================
+(function initResizer() {
+  const resizer = document.getElementById('panel-resizer');
+  const panel2  = document.getElementById('panel2');
+  const panel3  = document.getElementById('panel3');
+  let startX, startW2;
+
+  resizer.addEventListener('mousedown', e => {
+    e.preventDefault();
+    startX = e.clientX;
+    startW2 = panel2.getBoundingClientRect().width;
+    resizer.classList.add('dragging');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    function onMove(e) {
+      const delta = e.clientX - startX;
+      const mainW = document.getElementById('main').getBoundingClientRect().width;
+      const newW2 = Math.max(80, Math.min(startW2 + delta, mainW * 0.5));
+      panel2.style.width = newW2 + 'px';
+      panel2.style.minWidth = '0';
+      panel3.style.flex = '1';
+      panel3.style.width = '';
+    }
+    function onUp() {
+      resizer.classList.remove('dragging');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+})();
+
+// ============================================================
 // 앱 시작
 // ============================================================
 async function init() {
@@ -1302,6 +1980,18 @@ async function init() {
     render();
   }
 }
+
+// 리사이즈 mouseup — 전역
+document.addEventListener('mouseup', () => {
+  if (state.resizingTodoId) {
+    scheduleSave();
+    state.resizingTodoId = null;
+  }
+  if (state.resizingAssignId) {
+    scheduleSave();
+    state.resizingAssignId = null;
+  }
+});
 
 init();
 </script>
