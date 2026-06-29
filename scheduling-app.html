@@ -612,6 +612,33 @@
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: #c8cdd3; border-radius: 3px; }
 
+  /* ===== 날짜 피커 ===== */
+  .picker-day {
+    aspect-ratio: 1;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 4px;
+    font-size: 0.78rem;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: background 0.1s;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .picker-day:hover { background: var(--primary-light); }
+  .picker-day.selected { background: var(--primary); color: #fff; border-color: var(--primary); }
+  .picker-day.today-marker { border-color: var(--primary); font-weight: 700; }
+  .picker-day.other-month { color: #bbb; }
+  .picker-day.drag-hover { background: #bfdbfe; }
+  .picker-dow {
+    text-align: center; font-size: 0.68rem; font-weight: 700;
+    color: var(--text-muted); padding: 2px 0;
+  }
+  .picker-dow:nth-child(7) { color: #c0392b; }
+  .picker-dow:nth-child(6) { color: #2980b9; }
+  .picker-day:nth-child(7n) { color: #c0392b; }
+  .picker-day:nth-child(7n-1) { color: #2980b9; }
+  .picker-day.selected { color: #fff !important; }
+
   /* ===== 워터마크 ===== */
   #watermark {
     font-size: 0.65rem;
@@ -656,11 +683,21 @@
     #main.mobile-tab-2 #panel2 { display: flex; }
     #main.mobile-tab-3 #panel3 { display: flex; }
 
+    /* 캘린더: 토·일 절반 너비 (5fr 5fr 5fr 5fr 5fr 2.5fr 2.5fr) */
+    .cal-header,
+    .day-grid {
+      grid-template-columns: 5fr 5fr 5fr 5fr 5fr 2.5fr 2.5fr;
+    }
+
     /* 캘린더 터치 영역 확대 */
-    .week-row { min-height: 120px; }
-    .day-cell { min-height: 80px; padding: 2px 3px; font-size: 0.7rem; }
-    .day-num { font-size: 0.62rem; }
+    .week-row { min-height: 100px; }
+    .day-cell { min-height: 70px; padding: 2px 3px; font-size: 0.7rem; }
+    .day-num { font-size: 0.58rem; }
     .span-bar { height: 22px; font-size: 0.65rem; }
+
+    /* 모바일 패널3 bar: 체크박스·프로젝트명 숨김 */
+    .todo-bar input[type="checkbox"] { display: none; }
+    .todo-bar .mobile-proj-label { display: none; }
 
     /* 드래그 핸들 숨김 */
     .resize-handle, .assign-resize-handle { display: none; }
@@ -968,15 +1005,29 @@
   </div>
 </div>
 
-<!-- ===== 모달: Todo 날짜 지정 배정 ===== -->
+<!-- ===== 모달: Todo 날짜 지정 배정 (인라인 캘린더 피커) ===== -->
 <div class="modal-overlay" id="modal-assign-date">
-  <div class="modal">
-    <h2>날짜 지정 배정</h2>
-    <label>시작일</label>
-    <input type="date" id="input-assign-date-start">
-    <label>종료일</label>
-    <input type="date" id="input-assign-date-end">
-    <div class="modal-btns">
+  <div class="modal" style="width:min(420px,96vw);padding:20px;">
+    <h2 style="margin-bottom:4px;">날짜 지정 배정</h2>
+    <p id="assign-picker-title" style="font-size:0.8rem;color:var(--text-muted);margin-bottom:12px;"></p>
+    <div id="assign-picker-selected" style="font-size:0.78rem;color:var(--primary);min-height:1.2em;margin-bottom:8px;font-weight:600;"></div>
+
+    <!-- 피커 헤더 -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+      <button id="assign-picker-prev" style="background:none;border:none;font-size:1.1rem;cursor:pointer;padding:4px 10px;">&#8592;</button>
+      <span id="assign-picker-month-label" style="font-weight:700;font-size:0.9rem;"></span>
+      <button id="assign-picker-next" style="background:none;border:none;font-size:1.1rem;cursor:pointer;padding:4px 10px;">&#8594;</button>
+    </div>
+
+    <!-- 요일 헤더 -->
+    <div id="assign-picker-dow" style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:3px;"></div>
+
+    <!-- 날짜 그리드 -->
+    <div id="assign-picker-grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;user-select:none;touch-action:none;"></div>
+
+    <p style="font-size:0.72rem;color:var(--text-muted);margin-top:8px;">💡 클릭으로 날짜 선택 · 드래그로 범위 선택 · 다시 클릭하면 해제</p>
+
+    <div class="modal-btns" style="margin-top:14px;">
       <button class="btn-secondary" onclick="closeModal('modal-assign-date')">취소</button>
       <button class="btn-primary" id="btn-confirm-assign-date">배정</button>
     </div>
@@ -1047,7 +1098,7 @@ let state = {
   ctrlDragging: false,
   resizingTodoId: null,
   resizingAssignId: null,
-  mobileWeeks: 5,
+  mobileWeeks: 3,
   mobileAssigningTodoId: null,
 };
 
@@ -1357,6 +1408,24 @@ function renderTodos() {
       });
       item.addEventListener('dragend', () => { state.draggingTodoId = null; });
       attachTodoCtx(item, t);
+
+      // 모바일: 롱프레스 → 컨텍스트 메뉴 (PC 우클릭과 동일)
+      if (isMobile()) {
+        let pressTimer;
+        item.addEventListener('touchstart', (e) => {
+          pressTimer = setTimeout(() => {
+            navigator.vibrate && navigator.vibrate(40);
+            item.dispatchEvent(new MouseEvent('contextmenu', {
+              bubbles: true, cancelable: true,
+              clientX: e.touches[0].clientX,
+              clientY: e.touches[0].clientY,
+            }));
+          }, 600);
+        }, { passive: true });
+        item.addEventListener('touchend', () => clearTimeout(pressTimer));
+        item.addEventListener('touchmove', () => clearTimeout(pressTimer));
+      }
+
       group.appendChild(item);
     });
     enableTodoDragSort(group, p.id);
@@ -1686,7 +1755,7 @@ function renderCalendar() {
       const hasMemo = !t._recurring && (t.time || t.memo);
       bar.innerHTML = `
         <input type="checkbox" ${t.done ? 'checked' : ''} title="완료 처리">
-        ${projName ? `<span style="font-size:0.60rem;font-weight:700;opacity:0.7;flex-shrink:0">[${projName}]</span>` : ''}
+        ${projName ? `<span class="mobile-proj-label" style="font-size:0.60rem;font-weight:700;opacity:0.7;flex-shrink:0">[${projName}]</span>` : ''}
         <span class="span-todo-title" title="${t.title}">${t.title}</span>
         ${hasMemo ? '<span style="font-size:0.58rem;color:#888;flex-shrink:0">💬</span>' : ''}
         ${t._recurring ? '<span style="font-size:0.58rem;color:#888;flex-shrink:0">↺</span>' : `<button class="cal-todo-del" title="일정에서 제거">✕</button>`}
@@ -1724,16 +1793,37 @@ function renderCalendar() {
         });
         attachBarCtx(bar, t);
 
-        // PC: 클릭 → 상세 모달, 모바일: 롱프레스 → 상세 모달
+        // PC: 클릭 → 상세 모달
         if (!isMobile()) {
           bar.addEventListener('click', (e) => {
             if (e.target.tagName === 'INPUT' || e.target.classList.contains('cal-todo-del') || e.target.classList.contains('resize-handle')) return;
             openTodoDetailModal(t.id);
           });
         } else {
+          // 모바일: 롱프레스 → 컨텍스트 메뉴 (완료처리 + 상세보기 + 일정제거 + 완전삭제)
           let pressTimer;
-          bar.addEventListener('touchstart', () => {
-            pressTimer = setTimeout(() => openTodoDetailModal(t.id), 600);
+          bar.addEventListener('touchstart', (e) => {
+            pressTimer = setTimeout(() => {
+              navigator.vibrate && navigator.vibrate(40);
+              const originId = t.parentId || t.id;
+              const touch = e.touches[0];
+              showCtxMenu({ clientX: touch.clientX, clientY: touch.clientY, preventDefault: () => {} }, [
+                { label: t.done ? '↩ 완료 취소' : '✅ 완료 처리', action: () => {
+                  t.done = !t.done;
+                  scheduleSave(); render();
+                }},
+                { label: '🔍 상세 보기 / 메모', action: () => openTodoDetailModal(t.id) },
+                { label: '일정에서 제거', action: () => {
+                  if (t.parentId) { state.todos = state.todos.filter(x => x.id !== t.id); }
+                  else { t.startDate = null; t.endDate = null; }
+                  scheduleSave(); render();
+                }},
+                { label: '완전 삭제', danger: true, action: () => {
+                  state.todos = state.todos.filter(x => x.id !== originId && x.parentId !== originId);
+                  scheduleSave(); render();
+                }},
+              ]);
+            }, 600);
           }, { passive: true });
           bar.addEventListener('touchend', () => clearTimeout(pressTimer));
           bar.addEventListener('touchmove', () => clearTimeout(pressTimer));
@@ -1746,7 +1836,7 @@ function renderCalendar() {
     const maxLane = Math.max(...colNextLane);
     const maxAssign = Math.max(...colAssignCount);
     const neededH = DAY_NUM_H + (maxAssign + maxLane + 1) * (BAR_H + BAR_GAP);
-    const baseMinH = isMobile() ? 120 : 80;
+    const baseMinH = isMobile() ? 100 : 80;
     weekRow.style.minHeight = Math.max(baseMinH, neededH) + 'px';
 
     weekRow.appendChild(spanLayer);
@@ -1930,7 +2020,7 @@ function switchMobileTab(n) {
 }
 
 function toggleMobileWeeks() {
-  state.mobileWeeks = (state.mobileWeeks === 5) ? 2 : 5;
+  state.mobileWeeks = (state.mobileWeeks === 3) ? 5 : 3;
   const btn = document.getElementById('mobile-week-mode-btn');
   if (btn) btn.textContent = `${state.mobileWeeks}주`;
   renderCalendar();
@@ -1956,7 +2046,10 @@ function applyMobileSetup() {
   if (!isMobile()) return;
   switchMobileTab(3);
   const btn = document.getElementById('mobile-week-mode-btn');
-  if (btn) btn.style.display = 'inline-block';
+  if (btn) {
+    btn.style.display = 'inline-block';
+    btn.textContent = `${state.mobileWeeks}주`;
+  }
 }
 
 let wheelThrottle = false;
@@ -2119,24 +2212,186 @@ function openTodoInstancesModal(todoId) {
 }
 
 // ============================================================
-// 날짜 지정 배정 모달
+// 날짜 지정 배정 — 인라인 캘린더 피커
 // ============================================================
 let _assignDateTodoId = null;
+let _pickerYear = new Date().getFullYear();
+let _pickerMonth = new Date().getMonth(); // 0-based
+let _pickerSelected = new Set(); // ISO 날짜 문자열 집합
+let _pickerDragging = false;
+let _pickerDragStart = null;
+let _pickerDragAdding = true; // true=선택추가, false=선택해제
 
 function openAssignDateModal(todoId) {
   _assignDateTodoId = todoId;
-  const today = toISO(new Date());
-  document.getElementById('input-assign-date-start').value = today;
-  document.getElementById('input-assign-date-end').value = today;
+  _pickerYear = new Date().getFullYear();
+  _pickerMonth = new Date().getMonth();
+  _pickerSelected = new Set();
+
+  const todo = state.todos.find(t => t.id === todoId);
+  document.getElementById('assign-picker-title').textContent = todo ? todo.title : '';
+  renderAssignPicker();
   openModal('modal-assign-date');
 }
 
+function renderAssignPicker() {
+  const months = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+  document.getElementById('assign-picker-month-label').textContent = `${_pickerYear}년 ${months[_pickerMonth]}`;
+
+  // 선택된 날짜 표시
+  const selArr = [..._pickerSelected].sort();
+  const selEl = document.getElementById('assign-picker-selected');
+  if (selArr.length === 0) {
+    selEl.textContent = '날짜를 선택하세요';
+    selEl.style.color = 'var(--text-muted)';
+  } else if (selArr.length === 1) {
+    selEl.textContent = selArr[0];
+    selEl.style.color = 'var(--primary)';
+  } else {
+    selEl.textContent = `${selArr[0]} ~ ${selArr[selArr.length-1]} (${selArr.length}일)`;
+    selEl.style.color = 'var(--primary)';
+  }
+
+  // 요일 헤더
+  const dowEl = document.getElementById('assign-picker-dow');
+  dowEl.innerHTML = '';
+  ['월','화','수','목','금','토','일'].forEach(d => {
+    const c = document.createElement('div');
+    c.className = 'picker-dow';
+    c.textContent = d;
+    dowEl.appendChild(c);
+  });
+
+  // 날짜 그리드
+  const grid = document.getElementById('assign-picker-grid');
+  grid.innerHTML = '';
+
+  const firstDay = new Date(_pickerYear, _pickerMonth, 1);
+  // 월요일 시작: 0=월..6=일
+  let startDow = (firstDay.getDay() + 6) % 7; // 0=Mon
+  const daysInMonth = new Date(_pickerYear, _pickerMonth + 1, 0).getDate();
+  const daysInPrev = new Date(_pickerYear, _pickerMonth, 0).getDate();
+  const todayStr = toISO(new Date());
+
+  const totalCells = Math.ceil((startDow + daysInMonth) / 7) * 7;
+
+  for (let i = 0; i < totalCells; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'picker-day';
+    let ds;
+    if (i < startDow) {
+      const d = daysInPrev - startDow + i + 1;
+      const m = _pickerMonth === 0 ? 12 : _pickerMonth;
+      const y = _pickerMonth === 0 ? _pickerYear - 1 : _pickerYear;
+      ds = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      cell.classList.add('other-month');
+    } else if (i >= startDow + daysInMonth) {
+      const d = i - startDow - daysInMonth + 1;
+      const m = _pickerMonth === 11 ? 1 : _pickerMonth + 2;
+      const y = _pickerMonth === 11 ? _pickerYear + 1 : _pickerYear;
+      ds = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      cell.classList.add('other-month');
+    } else {
+      const d = i - startDow + 1;
+      ds = `${_pickerYear}-${String(_pickerMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      if (ds === todayStr) cell.classList.add('today-marker');
+    }
+    cell.textContent = parseInt(ds.slice(-2));
+    cell.dataset.date = ds;
+    if (_pickerSelected.has(ds)) cell.classList.add('selected');
+    grid.appendChild(cell);
+  }
+
+  // 마우스 이벤트 (PC)
+  grid.onmousedown = (e) => {
+    const cell = e.target.closest('.picker-day');
+    if (!cell) return;
+    e.preventDefault();
+    _pickerDragging = true;
+    const ds = cell.dataset.date;
+    _pickerDragAdding = !_pickerSelected.has(ds);
+    _pickerDragStart = ds;
+    _pickerSelected.has(ds) ? _pickerSelected.delete(ds) : _pickerSelected.add(ds);
+    renderAssignPicker();
+  };
+  grid.onmouseover = (e) => {
+    if (!_pickerDragging) return;
+    const cell = e.target.closest('.picker-day');
+    if (!cell) return;
+    const ds = cell.dataset.date;
+    // 드래그 범위 내 날짜 선택/해제
+    const [a, b] = [_pickerDragStart, ds].sort();
+    grid.querySelectorAll('.picker-day').forEach(c => {
+      const d = c.dataset.date;
+      if (d >= a && d <= b) {
+        _pickerDragAdding ? _pickerSelected.add(d) : _pickerSelected.delete(d);
+      }
+    });
+    renderAssignPicker();
+  };
+  document.onmouseup = () => { _pickerDragging = false; };
+
+  // 터치 이벤트 (모바일)
+  grid.ontouchstart = (e) => {
+    const cell = document.elementFromPoint(e.touches[0].clientX, e.touches[0].clientY);
+    if (!cell || !cell.dataset.date) return;
+    _pickerDragging = true;
+    const ds = cell.dataset.date;
+    _pickerDragAdding = !_pickerSelected.has(ds);
+    _pickerDragStart = ds;
+    _pickerDragAdding ? _pickerSelected.add(ds) : _pickerSelected.delete(ds);
+    renderAssignPicker();
+  };
+  grid.ontouchmove = (e) => {
+    if (!_pickerDragging) return;
+    e.preventDefault();
+    const cell = document.elementFromPoint(e.touches[0].clientX, e.touches[0].clientY);
+    if (!cell || !cell.dataset.date) return;
+    const ds = cell.dataset.date;
+    const [a, b] = [_pickerDragStart, ds].sort();
+    grid.querySelectorAll('.picker-day').forEach(c => {
+      const d = c.dataset.date;
+      if (d >= a && d <= b) {
+        _pickerDragAdding ? _pickerSelected.add(d) : _pickerSelected.delete(d);
+      }
+    });
+    renderAssignPicker();
+  };
+  grid.ontouchend = () => { _pickerDragging = false; };
+}
+
+document.getElementById('assign-picker-prev').addEventListener('click', () => {
+  _pickerMonth--;
+  if (_pickerMonth < 0) { _pickerMonth = 11; _pickerYear--; }
+  renderAssignPicker();
+});
+document.getElementById('assign-picker-next').addEventListener('click', () => {
+  _pickerMonth++;
+  if (_pickerMonth > 11) { _pickerMonth = 0; _pickerYear++; }
+  renderAssignPicker();
+});
+
 document.getElementById('btn-confirm-assign-date').addEventListener('click', () => {
-  const start = document.getElementById('input-assign-date-start').value;
-  const end   = document.getElementById('input-assign-date-end').value;
-  if (!start || !end || !_assignDateTodoId) return;
-  if (end < start) { alert('종료일이 시작일보다 빠릅니다.'); return; }
-  assignTodoToDateRange(_assignDateTodoId, start, end);
+  if (!_assignDateTodoId || _pickerSelected.size === 0) {
+    alert('날짜를 선택해주세요.'); return;
+  }
+  const sorted = [..._pickerSelected].sort();
+  // 연속된 날짜 범위들로 그룹핑하여 배정
+  const ranges = [];
+  let rangeStart = sorted[0], rangeEnd = sorted[0];
+  for (let i = 1; i < sorted.length; i++) {
+    const prev = parseDate(sorted[i-1]);
+    const curr = parseDate(sorted[i]);
+    const diff = Math.round((curr - prev) / 86400000);
+    if (diff === 1) {
+      rangeEnd = sorted[i];
+    } else {
+      ranges.push([rangeStart, rangeEnd]);
+      rangeStart = sorted[i]; rangeEnd = sorted[i];
+    }
+  }
+  ranges.push([rangeStart, rangeEnd]);
+  ranges.forEach(([s, e]) => assignTodoToDateRange(_assignDateTodoId, s, e));
   closeModal('modal-assign-date');
 });
 
