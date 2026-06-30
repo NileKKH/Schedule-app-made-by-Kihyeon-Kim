@@ -193,6 +193,11 @@
     font-weight: 700;
     line-height: 1.2;
   }
+  .todo-item.done-item {
+    background: transparent;
+    border-color: #bbb;
+    border-style: dashed;
+  }
   .todo-item.done-item .todo-title {
     text-decoration: line-through;
     color: var(--done-text);
@@ -427,9 +432,11 @@
   }
   .span-bar.todo-bar .resize-handle:hover { color: #666; }
   .span-bar.todo-bar.done-block {
-    background: #f0f0f0 !important;
-    border-color: #ccc !important;
-    border-left-color: #999 !important;
+    background: transparent !important;
+    border-color: #bbb !important;
+    border-left-color: #bbb !important;
+    border-style: dashed !important;
+    border-left-style: dashed !important;
   }
   .span-bar.todo-bar.done-block .span-todo-title { text-decoration: line-through; color: var(--done-text); }
 
@@ -449,9 +456,11 @@
     cursor: default;
   }
   .cal-todo-block.done-block {
-    background: #f0f0f0;
-    border-color: #ccc;
-    border-left-color: #999;
+    background: transparent;
+    border-color: #bbb;
+    border-left-color: #bbb;
+    border-style: dashed;
+    border-left-style: dashed;
   }
   .cal-todo-block.done-block .cal-todo-title {
     text-decoration: line-through;
@@ -762,8 +771,10 @@
     .todo-bar input[type="checkbox"] { display: none; }
     .todo-bar .mobile-proj-label { display: none; }
     .todo-bar .cal-todo-del { display: none; }
-    .span-bar { font-size: 0.60rem; }
+    .span-bar { font-size: 0.56rem; }
     .span-bar .span-todo-title { text-overflow: clip; }
+    .span-bar .cal-time-label { display: none; }
+    .todo-bar .memo-bubble { display: none; }
 
     /* 드래그 핸들 숨김 */
     .resize-handle, .assign-resize-handle { display: none; }
@@ -1526,7 +1537,7 @@ function buildTodoItem(t, color, showProjectLabel) {
 
   const item = document.createElement('div');
   item.className = 'todo-item' + (allDone ? ' done-item' : '');
-  item.style.borderLeft = `3px solid ${color.border}`;
+  item.style.borderLeft = allDone ? `3px dashed #bbb` : `3px solid ${color.border}`;
   item.draggable = true;
   item.dataset.id = t.id;
 
@@ -2032,7 +2043,7 @@ function renderCalendar() {
       }
       bar.style.top   = `${topPx}px`;
       const projName = proj ? proj.clientName : '';
-      const hasMemo = !t._recurring && (t.time || t.memo);
+      const hasMemo = !t._recurring && !!t.memo;
       const timeLabel = !t._recurring && t.time && !isMobile()
         ? `<span class="cal-time-label" style="font-size:0.60rem;font-weight:700;flex-shrink:0;opacity:0.85">[${t.time}]</span>`
         : '';
@@ -2041,7 +2052,7 @@ function renderCalendar() {
         ${projName ? `<span class="mobile-proj-label" style="font-size:0.60rem;font-weight:700;opacity:0.7;flex-shrink:0">[${projName}]</span>` : ''}
         ${timeLabel}
         <span class="span-todo-title" title="${t.title}">${t.title}</span>
-        ${hasMemo ? '<span style="font-size:0.58rem;color:#111;flex-shrink:0;text-shadow:0 0 1px rgba(0,0,0,0.4)">💬</span>' : ''}
+        ${hasMemo ? '<span class="memo-bubble" style="font-size:0.58rem;color:#111;flex-shrink:0;text-shadow:0 0 1px rgba(0,0,0,0.4)">💬</span>' : ''}
         ${t._recurring ? '<span style="font-size:0.58rem;color:#888;flex-shrink:0">↺</span>' : `<button class="cal-todo-del" title="일정에서 제거">✕</button>`}
         ${!t._recurring ? `<div class="resize-handle" data-tid="${t.id}">⋮</div>` : ''}
       `;
