@@ -195,8 +195,7 @@
   }
   .todo-item.done-item {
     background: transparent;
-    border-color: #bbb;
-    border-style: dashed;
+    border: 1px dotted #bbb;
   }
   .todo-item.done-item .todo-title {
     text-decoration: line-through;
@@ -433,10 +432,8 @@
   .span-bar.todo-bar .resize-handle:hover { color: #666; }
   .span-bar.todo-bar.done-block {
     background: transparent !important;
-    border-color: #bbb !important;
-    border-left-color: #bbb !important;
-    border-style: dashed !important;
-    border-left-style: dashed !important;
+    border: 1px dotted #bbb !important;
+    border-left: 1px dotted #bbb !important;
   }
   .span-bar.todo-bar.done-block .span-todo-title { text-decoration: line-through; color: var(--done-text); }
 
@@ -457,10 +454,8 @@
   }
   .cal-todo-block.done-block {
     background: transparent;
-    border-color: #bbb;
-    border-left-color: #bbb;
-    border-style: dashed;
-    border-left-style: dashed;
+    border: 1px dotted #bbb;
+    border-left: 1px dotted #bbb;
   }
   .cal-todo-block.done-block .cal-todo-title {
     text-decoration: line-through;
@@ -1537,7 +1532,7 @@ function buildTodoItem(t, color, showProjectLabel) {
 
   const item = document.createElement('div');
   item.className = 'todo-item' + (allDone ? ' done-item' : '');
-  item.style.borderLeft = allDone ? `3px dashed #bbb` : `3px solid ${color.border}`;
+  item.style.borderLeft = allDone ? `1px dotted #bbb` : `3px solid ${color.border}`;
   item.draggable = true;
   item.dataset.id = t.id;
 
