@@ -1231,6 +1231,7 @@ let gistToken = localStorage.getItem('gist_token') || '';
 let gistId    = localStorage.getItem('gist_id')    || '';
 let storageMode = localStorage.getItem('storage_mode') || ''; // 'local' | 'gist' | ''
 let saveTimer = null;
+let _allBarPositionFns = []; // 패널 리사이즈 시 bar 위치 재계산용
 
 const PROJECT_COLORS = [
   { bg: '#fce4ec', border: '#e57373', text: '#c62828' },
@@ -1780,6 +1781,7 @@ function getCalendarLabel() {
 
 function renderCalendar() {
   initCalendarStart();
+  _allBarPositionFns = []; // 렌더링마다 초기화
 
   const el = document.getElementById('calendar-body');
   el.innerHTML = '';
@@ -2218,6 +2220,7 @@ function renderCalendar() {
     el.appendChild(weekRow);
 
     // 셀 실제 좌표 기반으로 bar 위치 적용 (모바일 불균등 컬럼 대응)
+    _allBarPositionFns.push(applyBarPositions);
     requestAnimationFrame(applyBarPositions);
   }
 }
@@ -3077,6 +3080,7 @@ function initPanelResizer(resizerId, leftPanelId, rightPanelId, opts) {
         rightPanel.style.flex  = '1';
         rightPanel.style.width = '';
       }
+      requestAnimationFrame(() => _allBarPositionFns.forEach(fn => fn()));
     }
     function onUp() {
       resizer.classList.remove('dragging');
@@ -3084,6 +3088,7 @@ function initPanelResizer(resizerId, leftPanelId, rightPanelId, opts) {
       document.body.style.userSelect= '';
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup',   onUp);
+      requestAnimationFrame(() => _allBarPositionFns.forEach(fn => fn()));
     }
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup',   onUp);
