@@ -1573,19 +1573,25 @@ function buildTodoItem(t, color, showProjectLabel) {
   attachTodoCtx(item, t);
 
   if (isMobile()) {
-    let pressTimer;
+    let _touchStartX = 0, _touchStartY = 0;
     item.addEventListener('touchstart', (e) => {
-      pressTimer = setTimeout(() => {
-        navigator.vibrate && navigator.vibrate(40);
-        item.dispatchEvent(new MouseEvent('contextmenu', {
-          bubbles: true, cancelable: true,
-          clientX: e.touches[0].clientX,
-          clientY: e.touches[0].clientY,
-        }));
-      }, 600);
+      _touchStartX = e.touches[0].clientX;
+      _touchStartY = e.touches[0].clientY;
     }, { passive: true });
-    item.addEventListener('touchend', () => clearTimeout(pressTimer));
-    item.addEventListener('touchmove', () => clearTimeout(pressTimer));
+    item.addEventListener('touchend', (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.classList.contains('todo-del')) return;
+      const dx = e.changedTouches[0].clientX - _touchStartX;
+      const dy = e.changedTouches[0].clientY - _touchStartY;
+      if (Math.abs(dx) > 10 || Math.abs(dy) > 10) return;
+      e.preventDefault();
+      const touch = e.changedTouches[0];
+      navigator.vibrate && navigator.vibrate(20);
+      item.dispatchEvent(new MouseEvent('contextmenu', {
+        bubbles: true, cancelable: true,
+        clientX: touch.clientX,
+        clientY: touch.clientY,
+      }));
+    });
   }
 
   return item;
@@ -2526,12 +2532,11 @@ function attachTodoCtx(el, t) {
   el.addEventListener('contextmenu', e => {
     e.stopPropagation();
     const items = [];
-    items.push({ label: '🔍 상세 보기 / 수정', action: () => openTodoDetailModal(t.id) });
-    items.push({ label: '📋 배정 일정 보기', action: () => openTodoInstancesModal(t.id) });
-    items.push({ label: '📅 날짜 지정 배정', action: () => openAssignDateModal(t.id) });
-    if (isMobile()) {
-      items.push({ label: '📅 캘린더에서 날짜 선택', action: () => startMobileAssign(t.id) });
-    }
+    items.push({ label: '상세보기/수정', action: () => openTodoDetailModal(t.id) });
+    items.push({ label: '캘린더 날짜 배정', action: () => {
+      if (isMobile()) startMobileAssign(t.id);
+      else openAssignDateModal(t.id);
+    }});
     items.push({ label: '삭제', danger: true, action: () => {
       state.todos = state.todos.filter(x => x.id !== t.id && x.parentId !== t.id);
       scheduleSave(); render();
@@ -2899,9 +2904,25 @@ function openTodoDetailModal(todoId) {
   // 원본 todo 찾기 (복사본인 경우 원본을 사용)
   const originId = t.parentId || t.id;
   const origin = state.todos.find(x => x.id === originId) || t;
-  const dateStr = t.startDate
-    ? (t.startDate === t.endDate ? t.startDate : `${t.startDate} ~ ${t.endDate}`)
-    : '날짜 미지정';
+
+  // 원본 기준 모든 배정 인스턴스 수집
+  const instances = state.todos.filter(x => x.startDate && (x.id === originId || x.parentId === originId));
+  let metaHtml;
+  if (instances.length === 0) {
+    metaHtml = '📅 날짜 미지정';
+  } else {
+    const dateLines = instances
+      .sort((a, b) => a.startDate.localeCompare(b.startDate))
+      .map(inst => {
+        const ds = inst.startDate === inst.endDate
+          ? inst.startDate
+          : `${inst.startDate} ~ ${inst.endDate}`;
+        const ts = inst.time ? ` ${inst.time}` : '';
+        return `📅 ${ds}${ts}`;
+      })
+      .join('<br>');
+    metaHtml = dateLines;
+  }
 
   // 프로젝트 드롭다운 채우기
   const projSel = document.getElementById('select-todo-detail-project');
@@ -2913,11 +2934,11 @@ function openTodoDetailModal(todoId) {
   });
   projSel.value = origin.projectId;
 
-  document.getElementById('modal-todo-detail-meta').innerHTML = `📅 ${dateStr}`;
+  document.getElementById('modal-todo-detail-meta').innerHTML = metaHtml;
   document.getElementById('input-todo-detail-title').value = origin.title;
   document.getElementById('select-todo-detail-priority').value = origin.priority || 'none';
-  document.getElementById('input-todo-detail-time').value = t.time || '';
-  document.getElementById('input-todo-detail-memo').value = t.memo || '';
+  document.getElementById('input-todo-detail-time').value = origin.time || '';
+  document.getElementById('input-todo-detail-memo').value = origin.memo || '';
 
   document.getElementById('btn-save-todo-detail').onclick = () => {
     const newTitle    = document.getElementById('input-todo-detail-title').value.trim() || origin.title;
@@ -3105,7 +3126,13 @@ async function init() {
   applyMobileSetup();
 }
 
-window.addEventListener('resize', applyMobileSetup);
+window.addEventListener('resize', () => {
+  if (!isMobile()) return;
+  // 입력창에 포커스가 있을 때(키보드 팝업으로 인한 resize)는 탭 전환 무시
+  const focused = document.activeElement;
+  if (focused && (focused.tagName === 'INPUT' || focused.tagName === 'TEXTAREA' || focused.tagName === 'SELECT')) return;
+  applyMobileSetup();
+});
 
 // 리사이즈 mouseup — 전역
 document.addEventListener('mouseup', () => {
