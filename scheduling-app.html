@@ -201,8 +201,13 @@
     text-decoration: line-through;
     color: var(--done-text);
   }
+  .todo-completed-at {
+    font-size: 0.65rem;
+    color: #9aa0a6;
+    padding-left: 24px;
+  }
   .todo-item:active { cursor: grabbing; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
-  .todo-item input[type=checkbox] { flex-shrink: 0; cursor: pointer; }
+  .todo-item input[type=checkbox] { flex-shrink: 0; cursor: pointer; accent-color: #9aa0a6; }
   .todo-count-badge {
     font-size: 0.65rem; font-weight: 700; color: var(--primary);
     background: #dbeafe; border-radius: 3px; padding: 0 3px; flex-shrink: 0;
@@ -418,7 +423,7 @@
     justify-content: flex-start;
     gap: 4px;
   }
-  .span-bar.todo-bar input[type=checkbox] { flex-shrink: 0; cursor: pointer; margin: 0; }
+  .span-bar.todo-bar input[type=checkbox] { flex-shrink: 0; cursor: pointer; margin: 0; accent-color: #9aa0a6; }
   .span-bar.todo-bar .span-todo-title { flex: 1; overflow: hidden; text-overflow: ellipsis; }
   .span-bar.todo-bar .cal-todo-del {
     opacity: 0; background: none; border: none;
@@ -479,7 +484,7 @@
     width: 100%;
   }
   .cal-todo-title { flex: 1; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .cal-todo-row input[type=checkbox] { flex-shrink: 0; cursor: pointer; }
+  .cal-todo-row input[type=checkbox] { flex-shrink: 0; cursor: pointer; accent-color: #9aa0a6; }
   .cal-todo-del {
     opacity: 0; background: none; border: none;
     color: #dc3545; cursor: pointer; font-size: 0.68rem; flex-shrink: 0;
@@ -672,6 +677,46 @@
   }
   .todo-view-btn:not(:last-child) {
     border-right: 1px solid var(--border);
+  }
+
+  /* ===== Todo 완료 필터 바 ===== */
+  #todo-done-filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+  #todo-done-filter-toggle {
+    display: flex;
+    gap: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .todo-done-filter-btn {
+    font-size: 0.7rem;
+    padding: 3px 7px;
+    background: #fff;
+    color: var(--text-muted);
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.15s, color 0.15s;
+    white-space: nowrap;
+  }
+  .todo-done-filter-btn:not(:last-child) { border-right: 1px solid var(--border); }
+  .todo-done-filter-btn.active { background: #9aa0a6; color: #fff; }
+  #todo-done-sort {
+    font-size: 0.72rem;
+    padding: 3px 6px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-family: inherit;
+    background: #fff;
+    color: var(--text);
   }
 
   /* ===== 스크롤바 ===== */
@@ -950,6 +995,17 @@
         <button class="todo-view-btn" data-view="priority" onclick="setTodoView('priority')">중요도별</button>
       </div>
     </div>
+    <div id="todo-done-filter-bar">
+      <div id="todo-done-filter-toggle">
+        <button class="todo-done-filter-btn active" data-filter="hide" onclick="setTodoDoneFilter('hide')">완료 숨김</button>
+        <button class="todo-done-filter-btn" data-filter="all" onclick="setTodoDoneFilter('all')">전체</button>
+        <button class="todo-done-filter-btn" data-filter="only" onclick="setTodoDoneFilter('only')">완료만</button>
+      </div>
+      <select id="todo-done-sort" onchange="setTodoDoneSort(this.value)" style="display:none;">
+        <option value="project">프로젝트별</option>
+        <option value="recent">최근 완료순</option>
+      </select>
+    </div>
     <div class="panel-body" id="panel2-body">
       <div id="todo-add-box"></div>
       <div id="todo-scroll"></div>
@@ -1146,6 +1202,18 @@
   </div>
 </div>
 
+<!-- ===== 모달: 모바일 날짜 배정 확인 ===== -->
+<div class="modal-overlay" id="modal-mobile-assign-confirm">
+  <div class="modal" style="width:min(340px,92vw);">
+    <h2 style="margin-bottom:10px;">날짜 배정 확인</h2>
+    <p id="mobile-assign-confirm-text" style="font-size:0.88rem;color:var(--text);margin-bottom:18px;line-height:1.5;"></p>
+    <div class="modal-btns">
+      <button class="btn-secondary" id="btn-mobile-assign-cancel">취소</button>
+      <button class="btn-primary" id="btn-mobile-assign-confirm">배정</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== 모달: Todo 상세 / 메모 ===== -->
 <div class="modal-overlay" id="modal-todo-detail">
   <div class="modal">
@@ -1164,11 +1232,26 @@
     </select>
     <label>시간 (선택)</label>
     <input type="time" id="input-todo-detail-time" style="margin-bottom:10px;">
-    <label>메모 (선택)</label>
+    <label style="display:flex;align-items:center;justify-content:space-between;">
+      <span>메모 (선택)</span>
+      <button type="button" id="btn-expand-memo" style="background:none;border:none;color:var(--primary);font-size:0.75rem;cursor:pointer;text-decoration:underline;padding:0;">자세히 보기 ⤢</button>
+    </label>
     <textarea id="input-todo-detail-memo" rows="4" style="width:100%;font-family:inherit;font-size:0.85rem;border:1px solid var(--border);border-radius:var(--radius);padding:8px;resize:vertical;"></textarea>
     <div class="modal-btns">
       <button class="btn-secondary" onclick="closeModal('modal-todo-detail')">취소</button>
       <button class="btn-primary" id="btn-save-todo-detail">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 모달: 메모 자세히 보기 (확대) ===== -->
+<div class="modal-overlay" id="modal-memo-expand">
+  <div class="modal" style="width:min(640px,94vw);padding:20px 24px;">
+    <h2 style="font-size:1rem;margin-bottom:12px;">메모</h2>
+    <textarea id="input-memo-expand" rows="16" style="width:100%;font-family:inherit;font-size:0.9rem;border:1px solid var(--border);border-radius:var(--radius);padding:12px;resize:vertical;"></textarea>
+    <div class="modal-btns">
+      <button class="btn-secondary" id="btn-memo-expand-cancel">취소</button>
+      <button class="btn-primary" id="btn-memo-expand-save">적용</button>
     </div>
   </div>
 </div>
@@ -1225,6 +1308,8 @@ let state = {
   mobileAssigningTodoId: null,
   calSortDraggingId: null,
   todoView: 'project', // 'project' | 'priority'
+  todoDoneFilter: 'hide', // 'hide' | 'all' | 'only'
+  todoDoneSort: 'project', // 'project' | 'recent' (only used when todoDoneFilter === 'only')
 };
 
 let gistToken = localStorage.getItem('gist_token') || '';
@@ -1525,6 +1610,19 @@ function renderProjects() {
 // ============================================================
 // 렌더링 — 패널 2
 // ============================================================
+function getLatestCompletedAt(t) {
+  const instances = state.todos.filter(x => x.id === t.id || x.parentId === t.id);
+  const stamps = instances.map(x => x.completedAt).filter(Boolean);
+  if (stamps.length === 0) return null;
+  return stamps.sort().slice(-1)[0];
+}
+function formatCompletedAt(iso) {
+  const d = new Date(iso);
+  const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), day = String(d.getDate()).padStart(2,'0');
+  const hh = String(d.getHours()).padStart(2,'0'), mm = String(d.getMinutes()).padStart(2,'0');
+  return `${y}-${m}-${day} ${hh}:${mm}`;
+}
+
 function buildTodoItem(t, color, showProjectLabel) {
   const instances = state.todos.filter(x => x.startDate && (x.id === t.id || x.parentId === t.id));
   const instCount = instances.length;
@@ -1541,6 +1639,8 @@ function buildTodoItem(t, color, showProjectLabel) {
   const projLabel = showProjectLabel
     ? (() => { const p = state.projects.find(x => x.id === t.projectId); return p ? `<span style="font-size:0.65rem;color:${color.text};background:${color.bg};border-radius:3px;padding:0 4px;flex-shrink:0;">${p.clientName}</span>` : ''; })()
     : '';
+  const latestCompletedAt = allDone ? getLatestCompletedAt(t) : null;
+  const completedLabel = latestCompletedAt ? `<span class="todo-completed-at">완료: ${formatCompletedAt(latestCompletedAt)}</span>` : '';
   item.innerHTML = `
     ${needSchedule ? '<span class="need-schedule">[일정반영필요]</span>' : ''}
     <div class="todo-item-row">
@@ -1551,11 +1651,13 @@ function buildTodoItem(t, color, showProjectLabel) {
       <span class="todo-title">${t.title}</span>
       <button class="todo-del" title="삭제">✕</button>
     </div>
+    ${completedLabel}
   `;
 
   item.querySelector('input').addEventListener('change', (e) => {
     const checked = e.target.checked;
-    state.todos.forEach(x => { if (x.id === t.id || x.parentId === t.id) x.done = checked; });
+    const now = checked ? new Date().toISOString() : null;
+    state.todos.forEach(x => { if (x.id === t.id || x.parentId === t.id) { x.done = checked; x.completedAt = now; } });
     scheduleSave(); render();
   });
   item.querySelector('.todo-del').addEventListener('click', (ev) => {
@@ -1598,6 +1700,11 @@ function buildTodoItem(t, color, showProjectLabel) {
   return item;
 }
 
+function isTodoDone(t) {
+  const instances = state.todos.filter(x => x.startDate && (x.id === t.id || x.parentId === t.id));
+  return instances.length > 0 && instances.every(x => x.done);
+}
+
 function renderTodos() {
   const el = document.getElementById('todo-scroll');
   el.innerHTML = '';
@@ -1606,10 +1713,36 @@ function renderTodos() {
     ? state.projects.filter(p => p.id === state.activeProjectFilter)
     : state.projects;
 
-  if (state.todoView === 'project') {
+  const doneFilter = state.todoDoneFilter;
+  const passesDoneFilter = (t) => {
+    const done = isTodoDone(t);
+    if (doneFilter === 'hide') return !done;
+    if (doneFilter === 'only') return done;
+    return true; // 'all'
+  };
+
+  if (doneFilter === 'only' && state.todoDoneSort === 'recent') {
+    // 완료만 + 최근 완료순: 그룹 없이 플랫 리스트
+    const projectIds = new Set(filteredProjects.map(p => p.id));
+    const todos = state.todos
+      .filter(t => !t.parentId && projectIds.has(t.projectId) && isTodoDone(t))
+      .map(t => ({ t, completedAt: getLatestCompletedAt(t) || '' }))
+      .sort((a, b) => b.completedAt.localeCompare(a.completedAt))
+      .map(x => x.t);
+
+    if (todos.length > 0) {
+      const group = document.createElement('div');
+      group.className = 'todo-group';
+      todos.forEach(t => {
+        const color = getProjectColor(t.projectId);
+        group.appendChild(buildTodoItem(t, color, true));
+      });
+      el.appendChild(group);
+    }
+  } else if (state.todoView === 'project') {
     filteredProjects.forEach(p => {
       const todos = state.todos
-        .filter(t => t.projectId === p.id && !t.parentId)
+        .filter(t => t.projectId === p.id && !t.parentId && passesDoneFilter(t))
         .sort((a,b) => (a.order||0) - (b.order||0));
       if (todos.length === 0 && !state.activeProjectFilter) return;
 
@@ -1642,7 +1775,7 @@ function renderTodos() {
     const projectIds = new Set(filteredProjects.map(p => p.id));
     priorityGroups.forEach(pg => {
       const todos = state.todos
-        .filter(t => !t.parentId && (t.priority || 'none') === pg.key && projectIds.has(t.projectId))
+        .filter(t => !t.parentId && (t.priority || 'none') === pg.key && projectIds.has(t.projectId) && passesDoneFilter(t))
         .sort((a,b) => {
           const pa = state.projects.findIndex(p => p.id === a.projectId);
           const pb = state.projects.findIndex(p => p.id === b.projectId);
@@ -1698,15 +1831,20 @@ function renderTodos() {
     inp.type = 'text'; inp.placeholder = '업무 내용 입력 후 Enter';
     inp.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && inp.value.trim()) {
-        addTodo(sel.value, inp.value.trim(), priSel.value);
+        const newId = addTodo(sel.value, inp.value.trim(), priSel.value);
         inp.value = '';
+        if (isMobile()) startMobileAssign(newId);
       }
     });
 
     const btn = document.createElement('button');
     btn.textContent = '+ Todo 추가';
     btn.addEventListener('click', () => {
-      if (inp.value.trim()) { addTodo(sel.value, inp.value.trim(), priSel.value); inp.value = ''; }
+      if (inp.value.trim()) {
+        const newId = addTodo(sel.value, inp.value.trim(), priSel.value);
+        inp.value = '';
+        if (isMobile()) startMobileAssign(newId);
+      }
       else inp.focus();
     });
 
@@ -1724,10 +1862,12 @@ function renderTodos() {
 }
 
 function addTodo(projectId, title, priority) {
-  if (!projectId) return;
+  if (!projectId) return null;
   const maxOrder = state.todos.filter(t => t.projectId === projectId).reduce((m,t) => Math.max(m, t.order||0), -1);
-  state.todos.push({ id: uuid(), projectId, title, priority: priority || 'none', startDate: null, endDate: null, done: false, order: maxOrder+1 });
+  const id = uuid();
+  state.todos.push({ id, projectId, title, priority: priority || 'none', startDate: null, endDate: null, done: false, order: maxOrder+1 });
   scheduleSave(); render();
+  return id;
 }
 
 function setTodoView(view) {
@@ -1735,6 +1875,21 @@ function setTodoView(view) {
   document.querySelectorAll('.todo-view-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.view === view);
   });
+  renderTodos();
+}
+
+function setTodoDoneFilter(filter) {
+  state.todoDoneFilter = filter;
+  document.querySelectorAll('.todo-done-filter-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.filter === filter);
+  });
+  const sortSel = document.getElementById('todo-done-sort');
+  sortSel.style.display = (filter === 'only') ? '' : 'none';
+  renderTodos();
+}
+
+function setTodoDoneSort(sort) {
+  state.todoDoneSort = sort;
   renderTodos();
 }
 
@@ -1911,11 +2066,11 @@ function renderCalendar() {
         }
       });
 
-      // 모바일: 배정 모드에서 날짜 셀 탭 → 배정 완료
+      // 모바일: 배정 모드에서 날짜 셀 탭 → 확인 팝업 표시
       if (isMobile()) {
         cell.addEventListener('click', () => {
           if (!state.mobileAssigningTodoId) return;
-          assignTodoToDate(state.mobileAssigningTodoId, ds); // 내부에서 cancelMobileAssign 호출
+          confirmMobileAssignDate(ds);
         });
       }
 
@@ -2062,6 +2217,7 @@ function renderCalendar() {
       bar.querySelector('input').addEventListener('change', (e) => {
         if (!t._recurring) {
           t.done = e.target.checked;
+          t.completedAt = t.done ? new Date().toISOString() : null;
           scheduleSave(); render();
         }
       });
@@ -2189,6 +2345,7 @@ function renderCalendar() {
             showCtxMenu({ clientX: touch.clientX, clientY: touch.clientY, preventDefault: () => {} }, [
               { label: t.done ? '↩ 완료 취소' : '✅ 완료 처리', action: () => {
                 t.done = !t.done;
+                t.completedAt = t.done ? new Date().toISOString() : null;
                 scheduleSave(); render();
               }},
               { label: '🔍 상세 보기 / 메모', action: () => openTodoDetailModal(t.id) },
@@ -2417,10 +2574,35 @@ function startMobileAssign(todoId) {
   switchMobileTab(3);
 }
 
-function cancelMobileAssign() {
+function clearMobileAssignState() {
   state.mobileAssigningTodoId = null;
   const chip = document.getElementById('mobile-assign-chip');
   if (chip) chip.style.display = 'none';
+}
+
+function cancelMobileAssign() {
+  clearMobileAssignState();
+  if (isMobile()) switchMobileTab(2);
+}
+
+function confirmMobileAssignDate(ds) {
+  const todoId = state.mobileAssigningTodoId;
+  const todo = state.todos.find(t => t.id === todoId);
+  if (!todo) return;
+  document.getElementById('mobile-assign-confirm-text').innerHTML =
+    `<strong>${ds}</strong> 날짜에<br>"<strong>${todo.title}</strong>"(을)를 배정하시겠습니까?`;
+
+  const btnConfirm = document.getElementById('btn-mobile-assign-confirm');
+  const btnCancel  = document.getElementById('btn-mobile-assign-cancel');
+  btnConfirm.onclick = () => {
+    closeModal('modal-mobile-assign-confirm');
+    assignTodoToDate(todoId, ds); // 배정 후 패널3 유지 (캘린더에서 바로 확인)
+  };
+  btnCancel.onclick = () => {
+    closeModal('modal-mobile-assign-confirm');
+    cancelMobileAssign(); // 패널2로 복귀, todo는 미배정 상태로 유지
+  };
+  openModal('modal-mobile-assign-confirm');
 }
 
 function applyMobileSetup() {
@@ -2800,7 +2982,7 @@ function assignTodoToDateRange(todoId, start, end) {
 // assignTodoToDate (모바일 단일 날짜용) 업데이트
 function assignTodoToDate(todoId, ds) {
   assignTodoToDateRange(todoId, ds, ds);
-  cancelMobileAssign();
+  clearMobileAssignState();
 }
 
 function openEditTodoModal(tid) {
@@ -2926,6 +3108,10 @@ function openTodoDetailModal(todoId) {
       .join('<br>');
     metaHtml = dateLines;
   }
+  const latestCompletedAt = getLatestCompletedAt(origin);
+  if (latestCompletedAt) {
+    metaHtml += `<br><span style="color:#9aa0a6;">✔ 완료: ${formatCompletedAt(latestCompletedAt)}</span>`;
+  }
 
   // 프로젝트 드롭다운 채우기
   const projSel = document.getElementById('select-todo-detail-project');
@@ -2961,8 +3147,23 @@ function openTodoDetailModal(todoId) {
     closeModal('modal-todo-detail');
     scheduleSave(); render();
   };
+
+  document.getElementById('btn-expand-memo').onclick = () => {
+    const memoTextarea = document.getElementById('input-todo-detail-memo');
+    document.getElementById('input-memo-expand').value = memoTextarea.value;
+    openModal('modal-memo-expand');
+  };
+
   openModal('modal-todo-detail');
 }
+
+document.getElementById('btn-memo-expand-save').addEventListener('click', () => {
+  document.getElementById('input-todo-detail-memo').value = document.getElementById('input-memo-expand').value;
+  closeModal('modal-memo-expand');
+});
+document.getElementById('btn-memo-expand-cancel').addEventListener('click', () => {
+  closeModal('modal-memo-expand');
+});
 
 // ============================================================
 // 패널 1 드래그 정렬 (핸들 방식)
