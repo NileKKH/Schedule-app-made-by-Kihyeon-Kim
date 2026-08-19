@@ -135,8 +135,10 @@
   .project-item .proj-drag-handle:hover { color: var(--primary); }
   .project-item .proj-drag-handle:active { cursor: grabbing; }
   .project-item .proj-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; cursor: pointer; }
+  .project-item .proj-menu-btn { display: none; background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 2px 4px; font-size: 1rem; line-height: 1; }
   .project-item:hover { background: #f0f4ff; border-color: #c5d5f5; border-left-color: var(--primary); }
   .project-item.active { background: #dbeafe; border-color: #93c5fd; border-left-color: var(--primary); font-weight: 700; }
+  .project-item.closed { opacity: 0.65; border-left-color: #9aa0a6; }
   .project-item .proj-del {
     opacity: 0;
     background: none; border: none;
@@ -876,6 +878,7 @@
     /* 드래그 핸들 숨김 */
     .resize-handle, .assign-resize-handle { display: none; }
     .proj-drag-handle { display: none; }
+    .project-item .proj-menu-btn { display: block; }
 
     /* 컨텍스트 메뉴: 터치 친화적 */
     .ctx-item { padding: 12px 20px; font-size: 0.9rem; }
@@ -1396,6 +1399,7 @@ let state = {
   mobileWeeks: 3,
   mobileAssigningTodoId: null,
   mobileDayViewDate: null,
+  showClosedProjects: false,
   calSortDraggingId: null,
   todoView: 'project', // 'project' | 'priority'
   todoDoneFilter: 'hide', // 'hide' | 'all' | 'only'
@@ -1759,18 +1763,33 @@ function renderProjects() {
   form.appendChild(btn);
   addBox.appendChild(form);
 
+  const closedToggle = document.createElement('button');
+  closedToggle.type = 'button';
+  closedToggle.textContent = state.showClosedProjects ? '진행중 프로젝트 보기' : '종료 프로젝트 보기';
+  closedToggle.style.cssText = 'margin-top:6px;width:100%;font-size:0.72rem;padding:4px;border:1px solid var(--border);background:#fff;color:var(--text-muted);border-radius:var(--radius);cursor:pointer;';
+  closedToggle.addEventListener('click', () => {
+    state.showClosedProjects = !state.showClosedProjects;
+    state.activeProjectFilter = null;
+    render();
+  });
+  addBox.appendChild(closedToggle);
+
   // 프로젝트 목록 (스크롤 영역)
   const el = document.getElementById('project-scroll');
   el.innerHTML = '';
 
-  state.projects.forEach(p => {
+  state.projects.filter(p => state.showClosedProjects ? !!p.closedAt : !p.closedAt).forEach(p => {
     const div = document.createElement('div');
-    div.className = 'project-item' + (state.activeProjectFilter === p.id ? ' active' : '');
+    div.className = 'project-item' + (state.activeProjectFilter === p.id ? ' active' : '') + (p.closedAt ? ' closed' : '');
     div.dataset.pid = p.id;
-    div.innerHTML = `<span class="proj-drag-handle" title="드래그하여 순서 변경">⠿</span><span class="proj-name">${p.clientName}</span>`;
+    div.innerHTML = `<span class="proj-drag-handle" title="드래그하여 순서 변경">⠿</span><span class="proj-name">${p.clientName}</span><button type="button" class="proj-menu-btn" title="프로젝트 메뉴">⋮</button>`;
     div.querySelector('.proj-name').addEventListener('click', () => {
       state.activeProjectFilter = (state.activeProjectFilter === p.id) ? null : p.id;
       render();
+    });
+    div.querySelector('.proj-menu-btn').addEventListener('click', e => {
+      e.stopPropagation();
+      showCtxMenu({ clientX: e.clientX, clientY: e.clientY, preventDefault: () => {} }, getProjectCtxItems(p));
     });
     attachProjectCtx(div, p);
     el.appendChild(div);
@@ -1945,9 +1964,10 @@ function renderTodos() {
   const el = document.getElementById('todo-scroll');
   el.innerHTML = '';
 
+  const projectView = state.projects.filter(p => state.showClosedProjects ? !!p.closedAt : !p.closedAt);
   const filteredProjects = state.activeProjectFilter
-    ? state.projects.filter(p => p.id === state.activeProjectFilter)
-    : state.projects;
+    ? projectView.filter(p => p.id === state.activeProjectFilter)
+    : projectView;
 
   const doneFilter = state.todoDoneFilter;
   const passesDoneFilter = (t) => {
@@ -2083,13 +2103,14 @@ function renderTodos() {
   // Todo 추가 폼 (상단 고정 영역에 렌더링)
   const addBox = document.getElementById('todo-add-box');
   addBox.innerHTML = '';
-  if (state.projects.length > 0) {
+  const activeProjects = state.projects.filter(p => !p.closedAt);
+  if (activeProjects.length > 0) {
     const form = document.createElement('div');
     form.className = 'add-todo-form';
 
     const sel = document.createElement('select');
     sel.id = 'inline-todo-project';
-    state.projects.forEach(p => {
+    activeProjects.forEach(p => {
       const opt = document.createElement('option');
       opt.value = p.id; opt.textContent = p.clientName;
       sel.appendChild(opt);
@@ -3106,13 +3127,32 @@ document.addEventListener('keydown', e => {
 });
 
 // 패널 1 프로젝트 우클릭
+function getProjectCtxItems(p) {
+  return [
+    { label: '수정', action: () => openEditProjectModal(p.id) },
+    { label: p.closedAt ? '프로젝트 재개' : '프로젝트 종료', action: () => toggleProjectClosed(p.id) },
+    { label: '삭제', danger: true, action: () => deleteProject(p.id) },
+  ];
+}
+
 function attachProjectCtx(el, p) {
   el.addEventListener('contextmenu', e => {
-    showCtxMenu(e, [
-      { label: '수정', action: () => openEditProjectModal(p.id) },
-      { label: '삭제', danger: true, action: () => deleteProject(p.id) },
-    ]);
+    showCtxMenu(e, getProjectCtxItems(p));
   });
+}
+
+function toggleProjectClosed(pid) {
+  const project = state.projects.find(p => p.id === pid);
+  if (!project) return;
+  if (project.closedAt) {
+    project.closedAt = null;
+  } else {
+    if (!confirm(`"${project.clientName}" 프로젝트를 종료할까요?\n기존 Todo와 캘린더 일정은 유지됩니다.`)) return;
+    project.closedAt = new Date().toISOString();
+    if (state.activeProjectFilter === pid) state.activeProjectFilter = null;
+  }
+  scheduleSave();
+  render();
 }
 
 function openEditProjectModal(pid) {
