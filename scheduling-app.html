@@ -55,8 +55,19 @@
     display: flex; align-items: center; justify-content: center;
   }
   #month-nav button:hover { background: rgba(255,255,255,0.35); }
-  #month-label { font-size: 0.95rem; font-weight: 600; min-width: 120px; text-align: center; }
-  .scroll-hint { font-size: 0.72rem; color: rgba(255,255,255,0.5); margin-left: 4px; }
+  #feedback-btn {
+    background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.45);
+    color: #fff; border-radius: var(--radius); padding: 5px 9px; cursor: pointer;
+    font: inherit; font-size: 0.78rem;
+  }
+  #feedback-btn:hover { background: rgba(255,255,255,0.28); }
+  #feedback-count {
+    display: inline-flex; align-items: center; justify-content: center; min-width: 16px; height: 16px;
+    margin-left: 4px; padding: 0 4px; border-radius: 8px; background: #fff; color: var(--primary); font-size: 0.68rem;
+  }
+  #feedback-count:empty { display: none; }
+  #sync-status { font-size: 0.68rem; color: rgba(255,255,255,0.75); }
+  #sync-status.error { color: #ffd4d4; }
 
   /* ===== 3패널 레이아웃 ===== */
   #main {
@@ -566,6 +577,24 @@
   .btn-primary:hover { background: #1e3a5f; }
   .btn-secondary { background: #e9ecef; color: var(--text); }
   .btn-secondary:hover { background: #dee2e6; }
+  .feedback-item { border: 1px solid var(--border); border-left: 3px solid var(--primary); padding: 10px; border-radius: var(--radius); }
+  .feedback-item.resolved { border-left-color: #9aa0a6; opacity: 0.7; }
+  .feedback-item-text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.85rem; line-height: 1.45; }
+  .feedback-item-meta { margin-top: 7px; color: var(--text-muted); font-size: 0.72rem; }
+  .feedback-item-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 8px; }
+  .feedback-item-actions button { background: none; border: none; cursor: pointer; color: var(--primary); font: inherit; font-size: 0.75rem; padding: 2px; }
+  .feedback-item-actions .feedback-delete { color: #c23b3b; }
+  .mobile-day-todo {
+    width: 100%; text-align: left; padding: 12px; border: 1px solid var(--border);
+    border-left: 3px solid var(--primary); border-radius: var(--radius); background: #fff;
+    color: var(--text); font: inherit; cursor: pointer;
+  }
+  .mobile-day-todo.done { border-left: 1px dotted #bbb; background: transparent; }
+  .mobile-day-todo.done .mobile-day-todo-title { color: var(--done-text); text-decoration: line-through; }
+  .mobile-day-todo.recurring { border-left-color: #999; }
+  .mobile-day-todo-project { display: block; color: var(--text-muted); font-size: 0.72rem; margin-bottom: 4px; }
+  .mobile-day-todo-title { display: block; font-size: 0.94rem; line-height: 1.4; overflow-wrap: anywhere; }
+  .mobile-day-todo-meta { display: block; color: var(--text-muted); font-size: 0.76rem; line-height: 1.4; margin-top: 5px; white-space: pre-wrap; overflow-wrap: anywhere; }
 
   /* ===== 초기 설정 화면 ===== */
   #setup-screen {
@@ -803,8 +832,6 @@
     #header { padding: 8px 12px; }
     #header h1 { font-size: 0.9rem; }
     #watermark { display: none; }
-    .scroll-hint { display: none; }
-    #month-label { min-width: 90px; font-size: 0.85rem; }
 
     /* 메인: 패널 절대 배치 */
     #main { flex-direction: column; position: relative; overflow: hidden; }
@@ -992,11 +1019,11 @@
 <div id="header">
   <h1>📋 일정관리</h1>
   <div id="watermark">made by Kihyeon Kim</div>
+  <span id="sync-status" aria-live="polite"></span>
   <div id="month-nav">
+    <button id="feedback-btn" type="button">피드백<span id="feedback-count"></span></button>
     <button id="btn-prev-month">&#8592;</button>
-    <span id="month-label"></span>
     <button id="btn-next-month">&#8594;</button>
-    <span class="scroll-hint">↕ 스크롤로 주 이동</span>
     <button id="mobile-week-mode-btn" onclick="toggleMobileWeeks()">5주</button>
   </div>
 </div>
@@ -1023,6 +1050,7 @@
       <div id="todo-view-toggle" style="margin-left:auto;">
         <button class="todo-view-btn active" data-view="project" onclick="setTodoView('project')">프로젝트별</button>
         <button class="todo-view-btn" data-view="priority" onclick="setTodoView('priority')">중요도별</button>
+        <button class="todo-view-btn" data-view="date" onclick="setTodoView('date')">날짜별</button>
       </div>
     </div>
     <div id="todo-done-filter-bar">
@@ -1062,6 +1090,22 @@
 
 <!-- ===== 컨텍스트 메뉴 ===== -->
 <div id="ctx-menu"></div>
+
+<!-- ===== 모달: 피드백 ===== -->
+<div class="modal-overlay" id="modal-feedback">
+  <div class="modal" style="width:min(520px,95vw);">
+    <h2>피드백</h2>
+    <label for="input-feedback">불편했던 점이나 개선 아이디어</label>
+    <textarea id="input-feedback" rows="4" placeholder="예: 모바일에서 날짜를 찾기 어렵습니다." style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);font:inherit;font-size:0.85rem;resize:vertical;"></textarea>
+    <div class="modal-btns" style="margin-top:8px;">
+      <button class="btn-primary" id="btn-save-feedback">등록</button>
+    </div>
+    <div id="feedback-list" style="display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto;margin-top:16px;"></div>
+    <div class="modal-btns" style="margin-top:14px;">
+      <button class="btn-secondary" onclick="closeModal('modal-feedback')">닫기</button>
+    </div>
+  </div>
+</div>
 
 <!-- ===== 모달: 프로젝트 수정 ===== -->
 <div class="modal-overlay" id="modal-edit-project">
@@ -1244,11 +1288,25 @@
   </div>
 </div>
 
+<!-- ===== 모달: 모바일 날짜 일정 확대 ===== -->
+<div class="modal-overlay" id="modal-mobile-day">
+  <div class="modal" style="width:min(620px,96vw);max-height:86vh;display:flex;flex-direction:column;">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;">
+      <h2 id="mobile-day-title" style="margin:0;">날짜 일정</h2>
+      <button class="btn-secondary" type="button" onclick="closeModal('modal-mobile-day')">닫기</button>
+    </div>
+    <div id="mobile-day-list" style="display:flex;flex-direction:column;gap:8px;overflow-y:auto;"></div>
+  </div>
+</div>
+
 <!-- ===== 모달: Todo 상세 / 메모 ===== -->
 <div class="modal-overlay" id="modal-todo-detail">
   <div class="modal">
     <h2 style="font-size:1rem;margin-bottom:4px;">Todo 상세</h2>
-    <div id="modal-todo-detail-meta" style="font-size:0.8rem;color:var(--text-muted);margin-bottom:14px;"></div>
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:14px;">
+      <div id="modal-todo-detail-meta" style="font-size:0.8rem;color:var(--text-muted);min-width:0;"></div>
+      <button type="button" id="btn-todo-detail-add-schedule" class="btn-secondary" style="flex-shrink:0;padding:5px 8px;font-size:0.75rem;cursor:pointer;">+ 일정 추가</button>
+    </div>
     <label>프로젝트</label>
     <select id="select-todo-detail-project" style="margin-bottom:10px;"></select>
     <label>업무 내용</label>
@@ -1325,6 +1383,7 @@ let state = {
   weekAssignments: [],   // { id, projectId, startDate, endDate, order }
   todos: [],             // { id, projectId, title, startDate, endDate, done, order, parentId? }
   recurringTodos: [],    // { id, projectId, title, weekdays: [0-6 mon=0], startDate, endDate }
+  feedback: [],          // { id, text, createdAt, resolvedAt }
   currentYear: new Date().getFullYear(),
   currentMonth: new Date().getMonth(), // 0-based
   calendarStartDate: null, // 5주 윈도우 시작일 (ISO, 월요일 기준)
@@ -1336,6 +1395,7 @@ let state = {
   resizingAssignId: null,
   mobileWeeks: 3,
   mobileAssigningTodoId: null,
+  mobileDayViewDate: null,
   calSortDraggingId: null,
   todoView: 'project', // 'project' | 'priority'
   todoDoneFilter: 'hide', // 'hide' | 'all' | 'only'
@@ -1346,6 +1406,10 @@ let gistToken = localStorage.getItem('gist_token') || '';
 let gistId    = localStorage.getItem('gist_id')    || '';
 let storageMode = localStorage.getItem('storage_mode') || ''; // 'local' | 'gist' | ''
 let saveTimer = null;
+let gistSaveInFlight = false;
+let gistSaveQueued = false;
+let lastSyncedPayload = null;
+let dataRevision = 0;
 let _allBarPositionFns = []; // 패널 리사이즈 시 bar 위치 재계산용
 
 const PROJECT_COLORS = [
@@ -1430,37 +1494,111 @@ function getRecurringForDate(ds) {
 // ============================================================
 // GitHub Gist API
 // ============================================================
+const DATA_KEYS = ['projects', 'weekAssignments', 'todos', 'recurringTodos', 'feedback'];
+
+function getSchedulePayload() {
+  return {
+    projects: state.projects,
+    weekAssignments: state.weekAssignments,
+    todos: state.todos,
+    recurringTodos: state.recurringTodos,
+    feedback: state.feedback,
+  };
+}
+
+function clonePayload(payload) {
+  return JSON.parse(JSON.stringify(payload));
+}
+
+function normalizePayload(payload = {}) {
+  return Object.fromEntries(DATA_KEYS.map(key => [key, Array.isArray(payload[key]) ? payload[key] : []]));
+}
+
+function applySchedulePayload(payload) {
+  const normalized = normalizePayload(payload);
+  DATA_KEYS.forEach(key => { state[key] = normalized[key]; });
+}
+
+function setSyncStatus(message = '', isError = false) {
+  const el = document.getElementById('sync-status');
+  if (!el) return;
+  el.textContent = message;
+  el.classList.toggle('error', isError);
+}
+
+function valuesEqual(a, b) {
+  return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+}
+
+function mergeCollection(baseItems, remoteItems, localItems) {
+  const base = new Map(baseItems.map(item => [item.id, item]));
+  const remote = new Map(remoteItems.map(item => [item.id, item]));
+  const local = new Map(localItems.map(item => [item.id, item]));
+  const ids = [...remoteItems.map(item => item.id), ...localItems.map(item => item.id).filter(id => !remote.has(id))];
+
+  return ids.flatMap(id => {
+    const baseItem = base.get(id);
+    const remoteItem = remote.get(id);
+    const localItem = local.get(id);
+    if (!baseItem) return [localItem || remoteItem].filter(Boolean);
+
+    const localChanged = !valuesEqual(localItem, baseItem);
+    const remoteChanged = !valuesEqual(remoteItem, baseItem);
+    if (!localChanged) return remoteItem ? [remoteItem] : [];
+    if (!remoteChanged) return localItem ? [localItem] : [];
+    if (!localItem) return remoteItem ? [remoteItem] : [];
+    if (!remoteItem) return [localItem];
+
+    // 동시에 수정된 경우 로컬에서 바뀐 필드만 최신 원격 데이터에 적용한다.
+    const merged = { ...remoteItem };
+    Object.keys(localItem).forEach(key => {
+      if (!valuesEqual(localItem[key], baseItem[key])) merged[key] = localItem[key];
+    });
+    return [merged];
+  });
+}
+
+function mergeSchedulePayload(basePayload, remotePayload, localPayload) {
+  const base = normalizePayload(basePayload);
+  const remote = normalizePayload(remotePayload);
+  const local = normalizePayload(localPayload);
+  return Object.fromEntries(DATA_KEYS.map(key => [key, mergeCollection(base[key], remote[key], local[key])]));
+}
+
+async function fetchGistPayload() {
+  const res = await fetch(`https://api.github.com/gists/${gistId}`, {
+    headers: { Authorization: `token ${gistToken}` }
+  });
+  if (!res.ok) throw new Error(`Gist 불러오기 실패 (${res.status})`);
+  const data = await res.json();
+  const raw = data.files['schedule.json']?.content;
+  return raw ? normalizePayload(JSON.parse(raw)) : normalizePayload();
+}
+
 async function loadFromGist() {
   if (!gistToken || !gistId) return;
   try {
-    const res = await fetch(`https://api.github.com/gists/${gistId}`, {
-      headers: { Authorization: `token ${gistToken}` }
-    });
-    if (!res.ok) throw new Error();
-    const data = await res.json();
-    const raw = data.files['schedule.json']?.content;
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      state.projects        = parsed.projects        || [];
-      state.weekAssignments = parsed.weekAssignments || [];
-      state.todos           = parsed.todos           || [];
-      state.recurringTodos  = parsed.recurringTodos  || [];
-    }
+    const payload = await fetchGistPayload();
+    applySchedulePayload(payload);
+    lastSyncedPayload = clonePayload(payload);
+    setSyncStatus('동기화됨');
   } catch(e) {
     console.warn('Gist 불러오기 실패:', e);
+    setSyncStatus('동기화 실패', true);
   }
 }
 
 async function saveToGist() {
   if (!gistToken || !gistId) return;
-  const payload = {
-    projects:        state.projects,
-    weekAssignments: state.weekAssignments,
-    todos:           state.todos,
-    recurringTodos:  state.recurringTodos,
-  };
+  if (gistSaveInFlight) { gistSaveQueued = true; return; }
+  gistSaveInFlight = true;
+  setSyncStatus('저장 중...');
   try {
-    await fetch(`https://api.github.com/gists/${gistId}`, {
+    const saveRevision = dataRevision;
+    const localPayload = getSchedulePayload();
+    const remotePayload = await fetchGistPayload();
+    const payload = mergeSchedulePayload(lastSyncedPayload || remotePayload, remotePayload, localPayload);
+    const res = await fetch(`https://api.github.com/gists/${gistId}`, {
       method: 'PATCH',
       headers: {
         Authorization: `token ${gistToken}`,
@@ -1470,12 +1608,24 @@ async function saveToGist() {
         files: { 'schedule.json': { content: JSON.stringify(payload, null, 2) } }
       })
     });
+    if (!res.ok) throw new Error(`Gist 저장 실패 (${res.status})`);
+    lastSyncedPayload = clonePayload(payload);
+    if (dataRevision === saveRevision) applySchedulePayload(payload);
+    setSyncStatus('저장됨');
   } catch(e) {
     console.warn('Gist 저장 실패:', e);
+    setSyncStatus('저장 실패', true);
+  } finally {
+    gistSaveInFlight = false;
+    if (gistSaveQueued) {
+      gistSaveQueued = false;
+      saveToGist();
+    }
   }
 }
 
 function scheduleSave() {
+  dataRevision++;
   clearTimeout(saveTimer);
   if (storageMode === 'local') {
     saveTimer = setTimeout(saveToLocal, 1200);
@@ -1488,12 +1638,7 @@ function scheduleSave() {
 // 로컬 저장 (localStorage)
 // ============================================================
 function saveToLocal() {
-  const payload = {
-    projects:        state.projects,
-    weekAssignments: state.weekAssignments,
-    todos:           state.todos,
-    recurringTodos:  state.recurringTodos,
-  };
+  const payload = getSchedulePayload();
   try {
     localStorage.setItem('schedule_data', JSON.stringify(payload));
   } catch(e) {
@@ -1505,11 +1650,7 @@ function loadFromLocal() {
   try {
     const raw = localStorage.getItem('schedule_data');
     if (raw) {
-      const parsed = JSON.parse(raw);
-      state.projects        = parsed.projects        || [];
-      state.weekAssignments = parsed.weekAssignments || [];
-      state.todos           = parsed.todos           || [];
-      state.recurringTodos  = parsed.recurringTodos  || [];
+      applySchedulePayload(JSON.parse(raw));
     }
   } catch(e) {
     console.warn('로컬 불러오기 실패:', e);
@@ -1526,7 +1667,7 @@ async function createNewGist(token) {
     body: JSON.stringify({
       description: 'PwC 일정관리 데이터',
       public: false,
-      files: { 'schedule.json': { content: JSON.stringify({ projects:[], weekAssignments:[], todos:[], recurringTodos:[] }, null, 2) } }
+      files: { 'schedule.json': { content: JSON.stringify({ projects:[], weekAssignments:[], todos:[], recurringTodos:[], feedback:[] }, null, 2) } }
     })
   });
   if (!res.ok) throw new Error('토큰이 올바르지 않거나 gist 권한이 없습니다.');
@@ -1653,6 +1794,19 @@ function formatCompletedAt(iso) {
   return `${y}-${m}-${day} ${hh}:${mm}`;
 }
 
+function setTodoCompletion(todoId, done) {
+  const originId = state.todos.find(x => x.id === todoId)?.parentId || todoId;
+  const completedAt = done ? new Date().toISOString() : null;
+  state.todos.forEach(todo => {
+    if (todo.id === originId || todo.parentId === originId) {
+      todo.done = done;
+      todo.completedAt = completedAt;
+    }
+  });
+  scheduleSave();
+  render();
+}
+
 function buildTodoItem(t, color, showProjectLabel) {
   const instances = state.todos.filter(x => x.startDate && (x.id === t.id || x.parentId === t.id));
   const instCount = instances.length;
@@ -1685,10 +1839,8 @@ function buildTodoItem(t, color, showProjectLabel) {
   `;
 
   item.querySelector('input').addEventListener('change', (e) => {
-    const checked = e.target.checked;
-    const now = checked ? new Date().toISOString() : null;
-    state.todos.forEach(x => { if (x.id === t.id || x.parentId === t.id) { x.done = checked; x.completedAt = now; } });
-    scheduleSave(); render();
+    e.stopPropagation();
+    setTodoCompletion(t.id, e.target.checked);
   });
   item.querySelector('.todo-del').addEventListener('click', (ev) => {
     ev.stopPropagation();
@@ -1730,6 +1882,60 @@ function buildTodoItem(t, color, showProjectLabel) {
   return item;
 }
 
+function buildDateTodoItem(t, color) {
+  const pMeta = PRIORITY_META[t.priority || 'none'];
+  const item = document.createElement('div');
+  item.className = 'todo-item' + (t.done ? ' done-item' : '');
+  item.style.borderLeft = t.done ? '1px dotted #bbb' : `3px solid ${color.border}`;
+  const project = state.projects.find(p => p.id === t.projectId);
+  const endDate = t.endDate || t.startDate;
+  const dateLabel = t.startDate === endDate ? t.startDate : `${t.startDate} ~ ${endDate}`;
+  const completedLabel = t.completedAt ? `<span class="todo-completed-at">완료: ${formatCompletedAt(t.completedAt)}</span>` : '';
+  item.innerHTML = `
+    <div class="todo-item-row">
+      <input type="checkbox" class="done-checkbox" ${t.done ? 'checked' : ''}>
+      <span class="priority-badge ${pMeta.cls}">${pMeta.label}</span>
+      <span style="font-size:0.65rem;color:${color.text};background:${color.bg};border-radius:3px;padding:0 4px;flex-shrink:0;">${project ? project.clientName : ''}</span>
+      ${t.time ? `<span style="font-size:0.68rem;color:var(--text-muted);flex-shrink:0;">${t.time}</span>` : ''}
+      <span class="todo-title">${t.title}</span>
+      <button class="todo-del" title="일정에서 제거">✕</button>
+    </div>
+    <span style="font-size:0.68rem;color:var(--text-muted);padding-left:24px;">${dateLabel}</span>
+    ${completedLabel}
+  `;
+
+  item.querySelector('input').addEventListener('change', e => {
+    e.stopPropagation();
+    setTodoCompletion(t.id, e.target.checked);
+  });
+  item.querySelector('.todo-del').addEventListener('click', e => {
+    e.stopPropagation();
+    if (t.parentId) state.todos = state.todos.filter(todo => todo.id !== t.id);
+    else { t.startDate = null; t.endDate = null; }
+    scheduleSave(); render();
+  });
+  item.addEventListener('click', e => {
+    if (e.target.tagName !== 'INPUT' && !e.target.classList.contains('todo-del')) openTodoDetailModal(t.id);
+  });
+  attachBarCtx(item, t);
+
+  if (isMobile()) {
+    let startX = 0, startY = 0;
+    item.addEventListener('touchstart', e => {
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+    }, { passive: true });
+    item.addEventListener('touchend', e => {
+      if (e.target.tagName === 'INPUT' || e.target.classList.contains('todo-del')) return;
+      const touch = e.changedTouches[0];
+      if (Math.abs(touch.clientX - startX) > 10 || Math.abs(touch.clientY - startY) > 10) return;
+      e.preventDefault();
+      showMobileTodoMenu(t, touch.clientX, touch.clientY);
+    });
+  }
+  return item;
+}
+
 function isTodoDone(t) {
   const instances = state.todos.filter(x => x.startDate && (x.id === t.id || x.parentId === t.id));
   return instances.length > 0 && instances.every(x => x.done);
@@ -1751,7 +1957,7 @@ function renderTodos() {
     return true; // 'all'
   };
 
-  if (doneFilter === 'only' && state.todoDoneSort === 'recent') {
+  if (doneFilter === 'only' && state.todoDoneSort === 'recent' && state.todoView !== 'date') {
     // 완료만 + 최근 완료순: 그룹 없이 플랫 리스트
     const projectIds = new Set(filteredProjects.map(p => p.id));
     const todos = state.todos
@@ -1793,6 +1999,48 @@ function renderTodos() {
       enableTodoDragSort(group, p.id);
       el.appendChild(group);
     });
+  } else if (state.todoView === 'date') {
+    const projectIds = new Set(filteredProjects.map(p => p.id));
+    const scheduledTodos = state.todos
+      .filter(t => t.startDate && projectIds.has(t.projectId))
+      .filter(t => doneFilter === 'all' || (doneFilter === 'only' ? t.done : !t.done))
+      .sort((a, b) => a.startDate.localeCompare(b.startDate) || (a.time || '').localeCompare(b.time || ''));
+    const dates = [...new Set(scheduledTodos.map(t => t.startDate))];
+
+    dates.forEach(date => {
+      const group = document.createElement('div');
+      group.className = 'todo-group';
+      const label = document.createElement('div');
+      label.className = 'todo-group-label';
+      label.textContent = date;
+      label.style.background = '#e8f1fb';
+      label.style.color = 'var(--primary)';
+      label.style.borderLeft = '3px solid var(--primary)';
+      group.appendChild(label);
+      scheduledTodos.filter(t => t.startDate === date).forEach(t => {
+        group.appendChild(buildDateTodoItem(t, getProjectColor(t.projectId)));
+      });
+      el.appendChild(group);
+    });
+
+    if (doneFilter !== 'only') {
+      const unscheduled = state.todos
+        .filter(t => !t.parentId && !t.startDate && projectIds.has(t.projectId))
+        .filter(t => doneFilter === 'all' || !isTodoDone(t));
+      if (unscheduled.length > 0) {
+        const group = document.createElement('div');
+        group.className = 'todo-group';
+        const label = document.createElement('div');
+        label.className = 'todo-group-label';
+        label.textContent = '날짜 미지정';
+        label.style.background = '#fff3cd';
+        label.style.color = '#856404';
+        label.style.borderLeft = '3px solid #ffc107';
+        group.appendChild(label);
+        unscheduled.forEach(t => group.appendChild(buildTodoItem(t, getProjectColor(t.projectId), true)));
+        el.appendChild(group);
+      }
+    }
   } else {
     // 중요도별 그룹
     const priorityGroups = [
@@ -1905,6 +2153,8 @@ function setTodoView(view) {
   document.querySelectorAll('.todo-view-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.view === view);
   });
+  document.getElementById('todo-done-sort').style.display =
+    (state.todoDoneFilter === 'only' && view !== 'date') ? '' : 'none';
   renderTodos();
 }
 
@@ -1914,7 +2164,7 @@ function setTodoDoneFilter(filter) {
     btn.classList.toggle('active', btn.dataset.filter === filter);
   });
   const sortSel = document.getElementById('todo-done-sort');
-  sortSel.style.display = (filter === 'only') ? '' : 'none';
+  sortSel.style.display = (filter === 'only' && state.todoView !== 'date') ? '' : 'none';
   renderTodos();
 }
 
@@ -1953,25 +2203,12 @@ function shiftCalendar(weeks) {
   renderCalendar(); // 캘린더만 갱신 (패널1,2는 유지)
 }
 
-function getCalendarLabel() {
-  const start = parseDate(state.calendarStartDate);
-  const end = new Date(start);
-  end.setDate(end.getDate() + 34); // 5주 마지막날
-  const sy = start.getFullYear(), sm = start.getMonth() + 1;
-  const ey = end.getFullYear(), em = end.getMonth() + 1;
-  if (sy === ey && sm === em) return `${sy}년 ${sm}월`;
-  if (sy === ey) return `${sy}년 ${sm}월 ~ ${em}월`;
-  return `${sy}년 ${sm}월 ~ ${ey}년 ${em}월`;
-}
-
 function renderCalendar() {
   initCalendarStart();
   _allBarPositionFns = []; // 렌더링마다 초기화
 
   const el = document.getElementById('calendar-body');
   el.innerHTML = '';
-
-  document.getElementById('month-label').textContent = getCalendarLabel();
 
   const todayStr = toISO(new Date());
   const WEEKS = isMobile() ? state.mobileWeeks : 5;
@@ -2096,11 +2333,14 @@ function renderCalendar() {
         }
       });
 
-      // 모바일: 배정 모드에서 날짜 셀 탭 → 확인 팝업 표시
+      // 모바일: 배정 모드에서는 날짜 배정, 그 외에는 해당 날짜 일정 확대
       if (isMobile()) {
         cell.addEventListener('click', () => {
-          if (!state.mobileAssigningTodoId) return;
-          confirmMobileAssignDate(ds);
+          if (state.mobileAssigningTodoId) {
+            confirmMobileAssignDate(ds);
+          } else {
+            openMobileDayView(ds);
+          }
         });
       }
 
@@ -2313,11 +2553,18 @@ function renderCalendar() {
           let _touchStartX = 0, _touchStartY = 0;
           let _longPressTimer = null;
           let _isDraggingCal = false;
+          const resetMobileDragStyle = () => {
+            clearTimeout(_longPressTimer);
+            _isDraggingCal = false;
+            state.calSortDraggingId = null;
+            bar.style.opacity = '';
+            spanLayer.querySelectorAll('.todo-bar').forEach(b => { b.style.outline = ''; });
+          };
 
           bar.addEventListener('touchstart', (e) => {
+            resetMobileDragStyle();
             _touchStartX = e.touches[0].clientX;
             _touchStartY = e.touches[0].clientY;
-            _isDraggingCal = false;
             _longPressTimer = setTimeout(() => {
               _isDraggingCal = true;
               navigator.vibrate && navigator.vibrate([30, 50, 30]);
@@ -2344,6 +2591,8 @@ function renderCalendar() {
           }, { passive: false });
 
           bar.addEventListener('touchend', (e) => {
+            e.stopPropagation();
+            e.preventDefault();
             clearTimeout(_longPressTimer);
             bar.style.opacity = '';
             if (_isDraggingCal) {
@@ -2368,28 +2617,10 @@ function renderCalendar() {
             }
             const dy = e.changedTouches[0].clientY - _touchStartY;
             if (Math.abs(dy) > 10) return; // 스와이프는 무시
-            e.preventDefault();
-            const originId = t.parentId || t.id;
             const touch = e.changedTouches[0];
-            navigator.vibrate && navigator.vibrate(20);
-            showCtxMenu({ clientX: touch.clientX, clientY: touch.clientY, preventDefault: () => {} }, [
-              { label: t.done ? '↩ 완료 취소' : '✅ 완료 처리', action: () => {
-                t.done = !t.done;
-                t.completedAt = t.done ? new Date().toISOString() : null;
-                scheduleSave(); render();
-              }},
-              { label: '🔍 상세 보기 / 메모', action: () => openTodoDetailModal(t.id) },
-              { label: '일정에서 제거', action: () => {
-                if (t.parentId) { state.todos = state.todos.filter(x => x.id !== t.id); }
-                else { t.startDate = null; t.endDate = null; }
-                scheduleSave(); render();
-              }},
-              { label: '완전 삭제', danger: true, action: () => {
-                state.todos = state.todos.filter(x => x.id !== originId && x.parentId !== originId);
-                scheduleSave(); render();
-              }},
-            ]);
+            showMobileTodoMenu(t, touch.clientX, touch.clientY);
           });
+          bar.addEventListener('touchcancel', resetMobileDragStyle);
         }
       }
       _pendingBars.push({ bar, firstCol, colSpan });
@@ -2421,6 +2652,87 @@ function openModal(id) {
 function closeModal(id) {
   document.getElementById(id).classList.remove('active');
 }
+
+function formatFeedbackDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleString('ko-KR', {
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
+  });
+}
+
+function updateFeedbackCount() {
+  const unresolvedCount = state.feedback.filter(item => !item.resolvedAt).length;
+  document.getElementById('feedback-count').textContent = unresolvedCount || '';
+}
+
+function renderFeedbackList() {
+  const list = document.getElementById('feedback-list');
+  list.innerHTML = '';
+  const items = [...state.feedback].sort((a, b) => {
+    if (!!a.resolvedAt !== !!b.resolvedAt) return a.resolvedAt ? 1 : -1;
+    return new Date(b.createdAt) - new Date(a.createdAt);
+  });
+
+  if (items.length === 0) {
+    const empty = document.createElement('p');
+    empty.textContent = '등록된 피드백이 없습니다.';
+    empty.style.cssText = 'font-size:0.82rem;color:var(--text-muted);text-align:center;padding:16px 0;';
+    list.appendChild(empty);
+    return;
+  }
+
+  items.forEach(item => {
+    const row = document.createElement('div');
+    row.className = `feedback-item${item.resolvedAt ? ' resolved' : ''}`;
+    const text = document.createElement('div');
+    text.className = 'feedback-item-text';
+    text.textContent = item.text;
+    const meta = document.createElement('div');
+    meta.className = 'feedback-item-meta';
+    meta.textContent = item.resolvedAt
+      ? `등록 ${formatFeedbackDate(item.createdAt)} · 해결 ${formatFeedbackDate(item.resolvedAt)}`
+      : `등록 ${formatFeedbackDate(item.createdAt)} · 해결 필요`;
+    const actions = document.createElement('div');
+    actions.className = 'feedback-item-actions';
+    const resolve = document.createElement('button');
+    resolve.type = 'button';
+    resolve.textContent = item.resolvedAt ? '해결 취소' : '해결 완료';
+    resolve.addEventListener('click', () => {
+      item.resolvedAt = item.resolvedAt ? null : new Date().toISOString();
+      scheduleSave(); renderFeedbackList(); updateFeedbackCount();
+    });
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'feedback-delete';
+    remove.textContent = '삭제';
+    remove.addEventListener('click', () => {
+      state.feedback = state.feedback.filter(entry => entry.id !== item.id);
+      scheduleSave(); renderFeedbackList(); updateFeedbackCount();
+    });
+    actions.append(resolve, remove);
+    row.append(text, meta, actions);
+    list.appendChild(row);
+  });
+}
+
+function openFeedbackModal() {
+  document.getElementById('input-feedback').value = '';
+  renderFeedbackList();
+  openModal('modal-feedback');
+  document.getElementById('input-feedback').focus();
+}
+
+document.getElementById('feedback-btn').addEventListener('click', openFeedbackModal);
+document.getElementById('btn-save-feedback').addEventListener('click', () => {
+  const input = document.getElementById('input-feedback');
+  const text = input.value.trim();
+  if (!text) return;
+  state.feedback.push({ id: uuid(), text, createdAt: new Date().toISOString(), resolvedAt: null });
+  input.value = '';
+  scheduleSave(); renderFeedbackList(); updateFeedbackCount();
+  input.focus();
+});
 
 // 프로젝트 모달
 document.getElementById('btn-save-project').addEventListener('click', () => {
@@ -2594,6 +2906,92 @@ function toggleMobileWeeks() {
   renderCalendar();
 }
 
+function getMobileDayTodos(date) {
+  const scheduled = state.todos.filter(todo => {
+    const endDate = todo.endDate || todo.startDate;
+    return todo.startDate && todo.startDate <= date && endDate >= date;
+  });
+  return [...scheduled, ...getRecurringForDate(date)].sort((a, b) => {
+    const aOrder = a.calOrder ?? a.order ?? 0;
+    const bOrder = b.calOrder ?? b.order ?? 0;
+    return aOrder - bOrder;
+  });
+}
+
+function renderMobileDayView() {
+  const date = state.mobileDayViewDate;
+  if (!date) return;
+  document.getElementById('mobile-day-title').textContent = `${date} 일정`;
+  const list = document.getElementById('mobile-day-list');
+  list.innerHTML = '';
+  const todos = getMobileDayTodos(date);
+
+  if (todos.length === 0) {
+    const empty = document.createElement('p');
+    empty.textContent = '등록된 일정이 없습니다.';
+    empty.style.cssText = 'color:var(--text-muted);font-size:0.85rem;text-align:center;padding:24px 0;';
+    list.appendChild(empty);
+    return;
+  }
+
+  todos.forEach(todo => {
+    const project = state.projects.find(p => p.id === todo.projectId);
+    const item = document.createElement(todo._recurring ? 'div' : 'button');
+    item.className = `mobile-day-todo${todo.done ? ' done' : ''}${todo._recurring ? ' recurring' : ''}`;
+    if (!todo._recurring) item.type = 'button';
+    const meta = [
+      todo._recurring ? '반복 일정' : (todo.time || ''),
+      !todo._recurring && todo.memo ? todo.memo : '',
+    ].filter(Boolean).join('\n');
+    item.innerHTML = `
+      <span class="mobile-day-todo-project">${project ? project.clientName : ''}${todo._recurring ? ' · 반복' : ''}</span>
+      <span class="mobile-day-todo-title">${todo.title}</span>
+      ${meta ? `<span class="mobile-day-todo-meta">${meta}</span>` : ''}
+    `;
+    if (!todo._recurring) {
+      item.addEventListener('click', () => {
+        const rect = item.getBoundingClientRect();
+        showMobileTodoMenu(todo, rect.left + rect.width / 2, rect.top + 12);
+      });
+    }
+    list.appendChild(item);
+  });
+}
+
+function openMobileDayView(date) {
+  state.mobileDayViewDate = date;
+  renderMobileDayView();
+  openModal('modal-mobile-day');
+}
+
+function refreshMobileDayView() {
+  if (document.getElementById('modal-mobile-day').classList.contains('active')) {
+    renderMobileDayView();
+  }
+}
+
+function showMobileTodoMenu(todo, clientX, clientY) {
+  const originId = todo.parentId || todo.id;
+  navigator.vibrate && navigator.vibrate(20);
+  showCtxMenu({ clientX, clientY, preventDefault: () => {} }, [
+    { label: todo.done ? '↩ 완료 취소' : '✅ 완료 처리', action: () => {
+      todo.done = !todo.done;
+      todo.completedAt = todo.done ? new Date().toISOString() : null;
+      scheduleSave(); render(); refreshMobileDayView();
+    }},
+    { label: '🔍 상세 보기 / 메모', action: () => openTodoDetailModal(todo.id) },
+    { label: '일정에서 제거', action: () => {
+      if (todo.parentId) { state.todos = state.todos.filter(x => x.id !== todo.id); }
+      else { todo.startDate = null; todo.endDate = null; }
+      scheduleSave(); render(); refreshMobileDayView();
+    }},
+    { label: '완전 삭제', danger: true, action: () => {
+      state.todos = state.todos.filter(x => x.id !== originId && x.parentId !== originId);
+      scheduleSave(); render(); refreshMobileDayView();
+    }},
+  ]);
+}
+
 function startMobileAssign(todoId) {
   state.mobileAssigningTodoId = todoId;
   const todo = state.todos.find(t => t.id === todoId);
@@ -2659,7 +3057,7 @@ document.getElementById('btn-del-recurring').addEventListener('click', () => ope
 // 모달 외부 클릭 닫기
 document.querySelectorAll('.modal-overlay').forEach(overlay => {
   overlay.addEventListener('click', e => {
-    if (e.target === overlay) overlay.classList.remove('active');
+    if (e.target === overlay && overlay.id !== 'modal-todo-detail') overlay.classList.remove('active');
   });
 });
 
@@ -2670,6 +3068,7 @@ function render() {
   renderProjects();
   renderTodos();
   renderCalendar();
+  updateFeedbackCount();
 }
 
 // ============================================================
@@ -2821,9 +3220,11 @@ let _pickerSelected = new Set(); // ISO 날짜 문자열 집합
 let _pickerDragging = false;
 let _pickerDragStart = null;
 let _pickerDragAdding = true; // true=선택추가, false=선택해제
+let _assignDateReturnTodoId = null;
 
-function openAssignDateModal(todoId) {
+function openAssignDateModal(todoId, returnToDetail = false) {
   _assignDateTodoId = todoId;
+  _assignDateReturnTodoId = returnToDetail ? (state.todos.find(t => t.id === todoId)?.parentId || todoId) : null;
   _pickerYear = new Date().getFullYear();
   _pickerMonth = new Date().getMonth();
   _pickerSelected = new Set();
@@ -2993,6 +3394,11 @@ document.getElementById('btn-confirm-assign-date').addEventListener('click', () 
   ranges.push([rangeStart, rangeEnd]);
   ranges.forEach(([s, e]) => assignTodoToDateRange(_assignDateTodoId, s, e));
   closeModal('modal-assign-date');
+  if (_assignDateReturnTodoId) {
+    const todoId = _assignDateReturnTodoId;
+    _assignDateReturnTodoId = null;
+    openTodoDetailModal(todoId);
+  }
 });
 
 function assignTodoToDateRange(todoId, start, end) {
@@ -3001,7 +3407,8 @@ function assignTodoToDateRange(todoId, start, end) {
   if (todo.startDate) {
     const originId = todo.parentId || todo.id;
     state.todos.push({ id: uuid(), projectId: todo.projectId, title: todo.title,
-      parentId: originId, startDate: start, endDate: end, done: false, order: todo.order });
+      parentId: originId, startDate: start, endDate: end, done: false, order: todo.order,
+      priority: todo.priority, calOrder: todo.calOrder, time: todo.time || null, memo: todo.memo || null, completedAt: null });
   } else {
     todo.startDate = start;
     todo.endDate = end;
@@ -3159,6 +3566,11 @@ function openTodoDetailModal(todoId) {
   document.getElementById('input-todo-detail-time').value = origin.time || '';
   document.getElementById('input-todo-detail-memo').value = origin.memo || '';
 
+  document.getElementById('btn-todo-detail-add-schedule').onclick = () => {
+    closeModal('modal-todo-detail');
+    openAssignDateModal(originId, true);
+  };
+
   document.getElementById('btn-save-todo-detail').onclick = () => {
     const newTitle    = document.getElementById('input-todo-detail-title').value.trim() || origin.title;
     const newPriority = document.getElementById('select-todo-detail-priority').value;
@@ -3175,7 +3587,7 @@ function openTodoDetailModal(todoId) {
       }
     });
     closeModal('modal-todo-detail');
-    scheduleSave(); render();
+    scheduleSave(); render(); refreshMobileDayView();
   };
 
   document.getElementById('btn-expand-memo').onclick = () => {
