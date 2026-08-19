@@ -46,19 +46,11 @@
     box-shadow: 0 2px 6px rgba(0,0,0,0.15);
   }
   #header h1 { font-size: 1rem; font-weight: 600; letter-spacing: 0.5px; }
-  #month-nav { display: flex; align-items: center; gap: 10px; margin-left: auto; }
-  #month-nav button {
-    background: rgba(255,255,255,0.2);
-    border: none; color: #fff;
-    width: 28px; height: 28px; border-radius: 50%;
-    cursor: pointer; font-size: 0.9rem;
-    display: flex; align-items: center; justify-content: center;
-  }
-  #month-nav button:hover { background: rgba(255,255,255,0.35); }
   #feedback-btn {
     background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.45);
-    color: #fff; border-radius: var(--radius); padding: 5px 9px; cursor: pointer;
-    font: inherit; font-size: 0.78rem;
+    color: #fff; border-radius: var(--radius); padding: 5px 10px; cursor: pointer;
+    font: inherit; font-size: 0.78rem; margin-left: auto; width: auto; height: 28px;
+    display: inline-flex; align-items: center; justify-content: center; white-space: nowrap;
   }
   #feedback-btn:hover { background: rgba(255,255,255,0.28); }
   #feedback-count {
@@ -165,7 +157,7 @@
   }
 
   /* ===== 패널 2 — Todo 리스트 ===== */
-  #panel2 { width: 180px; min-width: 80px; flex-shrink: 0; }
+  #panel2 { width: 324px; min-width: 144px; flex-shrink: 0; }
 
   .todo-group { margin-bottom: 12px; }
   .todo-group-label {
@@ -824,7 +816,6 @@
 
   /* ===== 모바일 탭바 (데스크톱에서 숨김) ===== */
   #mobile-tab-bar { display: none; }
-  #mobile-week-mode-btn { display: none; }
 
   /* ===== 모바일 ===== */
   @media (max-width: 767px) {
@@ -942,17 +933,6 @@
       white-space: nowrap;
     }
 
-    /* 주 수 토글 버튼 */
-    #mobile-week-mode-btn {
-      display: inline-block;
-      font-size: 0.75rem;
-      padding: 3px 10px;
-      background: rgba(255,255,255,0.2);
-      border: none;
-      border-radius: 12px;
-      color: #fff;
-      cursor: pointer;
-    }
   }
 </style>
 </head>
@@ -1023,12 +1003,7 @@
   <h1>📋 일정관리</h1>
   <div id="watermark">made by Kihyeon Kim</div>
   <span id="sync-status" aria-live="polite"></span>
-  <div id="month-nav">
-    <button id="feedback-btn" type="button">피드백<span id="feedback-count"></span></button>
-    <button id="btn-prev-month">&#8592;</button>
-    <button id="btn-next-month">&#8594;</button>
-    <button id="mobile-week-mode-btn" onclick="toggleMobileWeeks()">5주</button>
-  </div>
+  <button id="feedback-btn" type="button">피드백<span id="feedback-count"></span></button>
 </div>
 
 <!-- ===== 메인 3패널 ===== -->
@@ -1417,14 +1392,22 @@ let dataRevision = 0;
 let _allBarPositionFns = []; // 패널 리사이즈 시 bar 위치 재계산용
 
 const PROJECT_COLORS = [
-  { bg: '#fce4ec', border: '#e57373', text: '#c62828' },
-  { bg: '#e8f5e9', border: '#66bb6a', text: '#2e7d32' },
-  { bg: '#fff8e1', border: '#ffca28', text: '#e65100' },
-  { bg: '#e3f2fd', border: '#64b5f6', text: '#1565c0' },
-  { bg: '#f3e5f5', border: '#ba68c8', text: '#6a1b9a' },
-  { bg: '#e0f7fa', border: '#26c6da', text: '#00695c' },
-  { bg: '#fbe9e7', border: '#ff7043', text: '#bf360c' },
-  { bg: '#f1f8e9', border: '#9ccc65', text: '#33691e' },
+  { bg: '#fee2e2', border: '#dc2626', text: '#991b1b' },
+  { bg: '#ffedd5', border: '#ea580c', text: '#9a3412' },
+  { bg: '#fef3c7', border: '#d97706', text: '#92400e' },
+  { bg: '#ecfccb', border: '#65a30d', text: '#3f6212' },
+  { bg: '#dcfce7', border: '#16a34a', text: '#166534' },
+  { bg: '#ccfbf1', border: '#0f766e', text: '#115e59' },
+  { bg: '#cffafe', border: '#0891b2', text: '#155e75' },
+  { bg: '#e0f2fe', border: '#0284c7', text: '#075985' },
+  { bg: '#dbeafe', border: '#2563eb', text: '#1d4ed8' },
+  { bg: '#e0e7ff', border: '#4f46e5', text: '#3730a3' },
+  { bg: '#f3e8ff', border: '#9333ea', text: '#6b21a8' },
+  { bg: '#fae8ff', border: '#c026d3', text: '#86198f' },
+  { bg: '#fce7f3', border: '#db2777', text: '#9d174d' },
+  { bg: '#ffe4e6', border: '#e11d48', text: '#9f1239' },
+  { bg: '#f5f5f4', border: '#78716c', text: '#44403c' },
+  { bg: '#e2e8f0', border: '#475569', text: '#334155' },
 ];
 
 function getProjectColor(projectId) {
@@ -1766,7 +1749,7 @@ function renderProjects() {
   const closedToggle = document.createElement('button');
   closedToggle.type = 'button';
   closedToggle.textContent = state.showClosedProjects ? '진행중 프로젝트 보기' : '종료 프로젝트 보기';
-  closedToggle.style.cssText = 'margin-top:6px;width:100%;font-size:0.72rem;padding:4px;border:1px solid var(--border);background:#fff;color:var(--text-muted);border-radius:var(--radius);cursor:pointer;';
+  closedToggle.style.cssText = 'margin-top:6px;width:100%;font-size:0.72rem;padding:5px;border:none;background:var(--primary);color:#fff;border-radius:var(--radius);cursor:pointer;';
   closedToggle.addEventListener('click', () => {
     state.showClosedProjects = !state.showClosedProjects;
     state.activeProjectFilter = null;
@@ -2898,14 +2881,6 @@ document.getElementById('btn-confirm-recurring-del').addEventListener('click', (
   scheduleSave(); render();
 });
 
-// 주 이동 (헤더 화살표: 4주씩, 스크롤: 1주씩)
-document.getElementById('btn-prev-month').addEventListener('click', () => {
-  shiftCalendar(-4);
-});
-document.getElementById('btn-next-month').addEventListener('click', () => {
-  shiftCalendar(4);
-});
-
 // 패널3 스크롤 → 1주 이동
 // ============================================================
 // 모바일 유틸
@@ -2918,13 +2893,6 @@ function switchMobileTab(n) {
   document.querySelectorAll('.mobile-tab-btn').forEach(btn => {
     btn.classList.toggle('active', Number(btn.dataset.tab) === n);
   });
-}
-
-function toggleMobileWeeks() {
-  state.mobileWeeks = (state.mobileWeeks === 3) ? 5 : 3;
-  const btn = document.getElementById('mobile-week-mode-btn');
-  if (btn) btn.textContent = `${state.mobileWeeks}주`;
-  renderCalendar();
 }
 
 function getMobileDayTodos(date) {
@@ -3057,11 +3025,6 @@ function confirmMobileAssignDate(ds) {
 function applyMobileSetup() {
   if (!isMobile()) return;
   switchMobileTab(3);
-  const btn = document.getElementById('mobile-week-mode-btn');
-  if (btn) {
-    btn.style.display = 'inline-block';
-    btn.textContent = `${state.mobileWeeks}주`;
-  }
 }
 
 let wheelThrottle = false;
