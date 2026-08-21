@@ -1388,7 +1388,6 @@ let saveTimer = null;
 let gistSaveInFlight = false;
 let gistSaveQueued = false;
 let lastSyncedPayload = null;
-let dataRevision = 0;
 let _allBarPositionFns = []; // 패널 리사이즈 시 bar 위치 재계산용
 
 const PROJECT_COLORS = [
@@ -1581,7 +1580,6 @@ async function saveToGist() {
   gistSaveInFlight = true;
   setSyncStatus('저장 중...');
   try {
-    const saveRevision = dataRevision;
     const localPayload = getSchedulePayload();
     const remotePayload = await fetchGistPayload();
     const payload = mergeSchedulePayload(lastSyncedPayload || remotePayload, remotePayload, localPayload);
@@ -1597,7 +1595,7 @@ async function saveToGist() {
     });
     if (!res.ok) throw new Error(`Gist 저장 실패 (${res.status})`);
     lastSyncedPayload = clonePayload(payload);
-    if (dataRevision === saveRevision) applySchedulePayload(payload);
+    // Saving must not replace the live UI state with an older merged snapshot.
     setSyncStatus('저장됨');
   } catch(e) {
     console.warn('Gist 저장 실패:', e);
@@ -1612,7 +1610,6 @@ async function saveToGist() {
 }
 
 function scheduleSave() {
-  dataRevision++;
   clearTimeout(saveTimer);
   if (storageMode === 'local') {
     saveTimer = setTimeout(saveToLocal, 1200);
