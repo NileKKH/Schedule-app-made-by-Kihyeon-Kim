@@ -1388,6 +1388,8 @@ let saveTimer = null;
 let gistSaveInFlight = false;
 let gistSaveQueued = false;
 let lastSyncedPayload = null;
+let draftRevision = 0;
+let isRefreshing = false;
 let _allBarPositionFns = []; // 패널 리사이즈 시 bar 위치 재계산용
 
 const PROJECT_COLORS = [
@@ -1505,6 +1507,42 @@ function applySchedulePayload(payload) {
   DATA_KEYS.forEach(key => { state[key] = normalized[key]; });
 }
 
+function getGistDraftKey() {
+  return gistId ? `schedule_gist_draft_${gistId}` : '';
+}
+
+function readGistDraft() {
+  const key = getGistDraftKey();
+  if (!key) return null;
+  try {
+    const draft = JSON.parse(localStorage.getItem(key) || 'null');
+    return draft?.payload ? draft : null;
+  } catch (e) {
+    console.warn('임시 저장본 불러오기 실패:', e);
+    return null;
+  }
+}
+
+function persistGistDraft() {
+  const key = getGistDraftKey();
+  if (!key) return;
+  try {
+    localStorage.setItem(key, JSON.stringify({
+      basePayload: clonePayload(lastSyncedPayload || normalizePayload()),
+      payload: clonePayload(getSchedulePayload()),
+      revision: draftRevision,
+    }));
+  } catch (e) {
+    console.warn('임시 저장 실패:', e);
+  }
+}
+
+function clearGistDraft() {
+  const key = getGistDraftKey();
+  if (!key) return;
+  localStorage.removeItem(key);
+}
+
 function setSyncStatus(message = '', isError = false) {
   const el = document.getElementById('sync-status');
   if (!el) return;
@@ -1563,14 +1601,30 @@ async function fetchGistPayload() {
 
 async function loadFromGist() {
   if (!gistToken || !gistId) return;
+  const draft = readGistDraft();
   try {
     const payload = await fetchGistPayload();
-    applySchedulePayload(payload);
     lastSyncedPayload = clonePayload(payload);
-    setSyncStatus('동기화됨');
+    if (draft) {
+      draftRevision = draft.revision || 0;
+      applySchedulePayload(mergeSchedulePayload(draft.basePayload || payload, payload, draft.payload));
+      // 복구한 변경 내용은 아직 Gist에 반영되지 않았으므로 임시 저장본을 유지한다.
+      persistGistDraft();
+      setSyncStatus('임시 저장 복구됨 · 저장 대기');
+      saveTimer = setTimeout(saveToGist, 0);
+    } else {
+      applySchedulePayload(payload);
+      setSyncStatus('동기화됨');
+    }
   } catch(e) {
     console.warn('Gist 불러오기 실패:', e);
-    setSyncStatus('동기화 실패', true);
+    if (draft) {
+      draftRevision = draft.revision || 0;
+      applySchedulePayload(draft.payload);
+      setSyncStatus('임시 저장 복구됨 · 동기화 대기', true);
+    } else {
+      setSyncStatus('동기화 실패', true);
+    }
   }
 }
 
@@ -1580,7 +1634,8 @@ async function saveToGist() {
   gistSaveInFlight = true;
   setSyncStatus('저장 중...');
   try {
-    const localPayload = getSchedulePayload();
+    const localPayload = clonePayload(getSchedulePayload());
+    const savedRevision = draftRevision;
     const remotePayload = await fetchGistPayload();
     const payload = mergeSchedulePayload(lastSyncedPayload || remotePayload, remotePayload, localPayload);
     const res = await fetch(`https://api.github.com/gists/${gistId}`, {
@@ -1595,8 +1650,14 @@ async function saveToGist() {
     });
     if (!res.ok) throw new Error(`Gist 저장 실패 (${res.status})`);
     lastSyncedPayload = clonePayload(payload);
+    // 저장 중 추가된 변경이 없다면, Gist와 같은 내용이므로 임시 저장본을 지운다.
+    if (savedRevision === draftRevision) {
+      clearGistDraft();
+      setSyncStatus('저장됨');
+    } else {
+      setSyncStatus('저장 대기...');
+    }
     // Saving must not replace the live UI state with an older merged snapshot.
-    setSyncStatus('저장됨');
   } catch(e) {
     console.warn('Gist 저장 실패:', e);
     setSyncStatus('저장 실패', true);
@@ -1612,10 +1673,59 @@ async function saveToGist() {
 function scheduleSave() {
   clearTimeout(saveTimer);
   if (storageMode === 'local') {
-    saveTimer = setTimeout(saveToLocal, 1200);
-  } else {
-    saveTimer = setTimeout(saveToGist, 1200);
+    saveToLocal();
+  } else if (storageMode === 'gist') {
+    // Gist 저장 전에도 현재 작업을 이 기기에 즉시 보관해 새로고침/통신 실패를 대비한다.
+    draftRevision += 1;
+    persistGistDraft();
+    setSyncStatus('저장 대기...');
+    saveTimer = setTimeout(saveToGist, 5000);
   }
+}
+
+function savePendingBeforeExit() {
+  if (storageMode === 'local') {
+    saveToLocal();
+    return;
+  }
+  if (storageMode !== 'gist' || !readGistDraft()) return;
+  clearTimeout(saveTimer);
+  // 페이지가 닫히기 전 Gist 저장도 즉시 시도한다. 완료되지 않아도 임시 저장본으로 복구된다.
+  if (!gistSaveInFlight) saveToGist();
+}
+
+function waitForGistIdle() {
+  return new Promise(resolve => {
+    const check = () => gistSaveInFlight ? setTimeout(check, 50) : resolve();
+    check();
+  });
+}
+
+async function saveAndRefresh() {
+  if (isRefreshing) return;
+  isRefreshing = true;
+
+  if (storageMode === 'local') {
+    saveToLocal();
+    window.location.reload();
+    return;
+  }
+  if (storageMode !== 'gist') {
+    window.location.reload();
+    return;
+  }
+
+  clearTimeout(saveTimer);
+  // F5/Ctrl+R은 Gist 저장을 바로 시작하고, 통신이 오래 걸리면 임시 저장본을 남긴 채 새로고침한다.
+  persistGistDraft();
+  setSyncStatus('저장 후 새로고침 중...');
+  if (gistSaveInFlight) gistSaveQueued = true;
+  else saveToGist();
+  await Promise.race([
+    waitForGistIdle(),
+    new Promise(resolve => setTimeout(resolve, 8000)),
+  ]);
+  window.location.reload();
 }
 
 // ============================================================
@@ -3779,6 +3889,20 @@ window.addEventListener('resize', () => {
   const focused = document.activeElement;
   if (focused && (focused.tagName === 'INPUT' || focused.tagName === 'TEXTAREA' || focused.tagName === 'SELECT')) return;
   applyMobileSetup();
+});
+
+// Ctrl/Cmd+R 및 F5를 누르면 저장 대기 시간을 건너뛰고 먼저 저장한 뒤 새로고침한다.
+document.addEventListener('keydown', e => {
+  const isRefreshKey = e.key === 'F5' || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'r');
+  if (!isRefreshKey) return;
+  e.preventDefault();
+  saveAndRefresh();
+});
+
+// 브라우저 새로고침 버튼·탭 닫기처럼 취소할 수 없는 이탈에서도 우선 임시 저장본을 남긴다.
+window.addEventListener('pagehide', savePendingBeforeExit);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') savePendingBeforeExit();
 });
 
 // 리사이즈 mouseup — 전역
