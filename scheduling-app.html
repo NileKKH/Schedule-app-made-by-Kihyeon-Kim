@@ -186,6 +186,11 @@
     transition: box-shadow 0.15s;
     position: relative;
   }
+  .todo-item.invi-block,
+  .span-bar.todo-bar.invi-block,
+  .mobile-day-todo.invi-block {
+    border: 3px solid #dc2626 !important;
+  }
   .todo-item-row {
     display: flex;
     align-items: center;
@@ -281,6 +286,35 @@
   }
   .add-todo-form select:focus, .add-todo-form input:focus {
     border-color: var(--primary);
+  }
+  .todo-invi-time-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 5px;
+  }
+  .todo-invi-check {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-width: 0;
+    padding: 5px 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: #fff;
+    color: var(--text);
+    font-size: 0.82rem;
+    cursor: pointer;
+  }
+  .todo-invi-check input {
+    width: auto;
+    margin: 0;
+    padding: 0;
+  }
+  .todo-invi-time-row input[type=time] {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
   }
   .add-todo-form button {
     padding: 5px; background: var(--primary); color: #fff;
@@ -474,6 +508,9 @@
     background: transparent !important;
     border: 1px dotted #bbb !important;
     border-left: 1px dotted #bbb !important;
+  }
+  .span-bar.todo-bar.done-block.invi-block {
+    border: 3px solid #dc2626 !important;
   }
   .span-bar.todo-bar.done-block .span-todo-title { text-decoration: line-through; color: var(--done-text); }
 
@@ -863,7 +900,6 @@
     .todo-bar .cal-todo-del { display: none; }
     .span-bar { font-size: 0.56rem; }
     .span-bar .span-todo-title { text-overflow: clip; }
-    .span-bar .cal-time-label { display: none; }
     .todo-bar .memo-bubble { display: none; }
 
     /* 드래그 핸들 숨김 */
@@ -1298,6 +1334,10 @@
     </select>
     <label>시간 (선택)</label>
     <input type="time" id="input-todo-detail-time" style="margin-bottom:10px;">
+    <label style="display:flex;align-items:center;gap:6px;margin-bottom:10px;cursor:pointer;">
+      <input type="checkbox" id="input-todo-detail-invi" style="width:auto;margin:0;">
+      <span>invi 여부</span>
+    </label>
     <label style="display:flex;align-items:center;justify-content:space-between;">
       <span>메모 (선택)</span>
       <button type="button" id="btn-expand-memo" style="background:none;border:none;color:var(--primary);font-size:0.75rem;cursor:pointer;text-decoration:underline;padding:0;">자세히 보기 ⤢</button>
@@ -1450,6 +1490,9 @@ function addDays(dateStr, n) {
 }
 function isBetween(ds, start, end) {
   return ds >= start && ds <= end;
+}
+function isInviTodo(todo) {
+  return !!(todo && todo.invi && todo.time);
 }
 function getWeekStart(dateStr) {
   // 해당 날짜가 속한 주의 일요일 반환
@@ -1923,7 +1966,7 @@ function buildTodoItem(t, color, showProjectLabel) {
   const pMeta = PRIORITY_META[t.priority || 'none'];
 
   const item = document.createElement('div');
-  item.className = 'todo-item' + (allDone ? ' done-item' : '');
+  item.className = 'todo-item' + (allDone ? ' done-item' : '') + (isInviTodo(t) ? ' invi-block' : '');
   item.style.borderLeft = allDone ? `1px dotted #bbb` : `3px solid ${color.border}`;
   item.draggable = true;
   item.dataset.id = t.id;
@@ -1941,6 +1984,7 @@ function buildTodoItem(t, color, showProjectLabel) {
       <span class="priority-badge ${pMeta.cls}">${pMeta.label}</span>
       ${instCount > 0 ? `<span class="todo-count-badge">${instCount}</span>` : ''}
       ${projLabel}
+      ${t.time ? `<span style="font-size:0.68rem;color:var(--text-muted);flex-shrink:0;">${t.time}</span>` : ''}
       <span class="todo-title">${t.title}</span>
       <button class="todo-del" title="삭제">✕</button>
     </div>
@@ -1994,7 +2038,7 @@ function buildTodoItem(t, color, showProjectLabel) {
 function buildDateTodoItem(t, color) {
   const pMeta = PRIORITY_META[t.priority || 'none'];
   const item = document.createElement('div');
-  item.className = 'todo-item' + (t.done ? ' done-item' : '');
+  item.className = 'todo-item' + (t.done ? ' done-item' : '') + (isInviTodo(t) ? ' invi-block' : '');
   item.style.borderLeft = t.done ? '1px dotted #bbb' : `3px solid ${color.border}`;
   const project = state.projects.find(p => p.id === t.projectId);
   const endDate = t.endDate || t.startDate;
@@ -2216,11 +2260,32 @@ function renderTodos() {
     });
     priSel.value = 'none';
 
+    const inviTimeRow = document.createElement('div');
+    inviTimeRow.className = 'todo-invi-time-row';
+
+    const inviLabel = document.createElement('label');
+    inviLabel.className = 'todo-invi-check';
+    const inviInput = document.createElement('input');
+    inviInput.type = 'checkbox';
+    inviInput.id = 'inline-todo-invi';
+    const inviText = document.createElement('span');
+    inviText.textContent = 'invi 여부';
+    inviLabel.appendChild(inviInput);
+    inviLabel.appendChild(inviText);
+
+    const timeInput = document.createElement('input');
+    timeInput.type = 'time';
+    timeInput.id = 'inline-todo-time';
+    timeInput.setAttribute('aria-label', '시간');
+
+    inviTimeRow.appendChild(inviLabel);
+    inviTimeRow.appendChild(timeInput);
+
     const inp = document.createElement('input');
     inp.type = 'text'; inp.placeholder = '업무 내용 입력 후 Enter';
     inp.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && inp.value.trim()) {
-        const newId = addTodo(sel.value, inp.value.trim(), priSel.value);
+        const newId = addTodo(sel.value, inp.value.trim(), priSel.value, inviInput.checked, timeInput.value || null);
         inp.value = '';
         if (isMobile()) startMobileAssign(newId);
       }
@@ -2230,7 +2295,7 @@ function renderTodos() {
     btn.textContent = '+ Todo 추가';
     btn.addEventListener('click', () => {
       if (inp.value.trim()) {
-        const newId = addTodo(sel.value, inp.value.trim(), priSel.value);
+        const newId = addTodo(sel.value, inp.value.trim(), priSel.value, inviInput.checked, timeInput.value || null);
         inp.value = '';
         if (isMobile()) startMobileAssign(newId);
       }
@@ -2239,6 +2304,7 @@ function renderTodos() {
 
     form.appendChild(sel);
     form.appendChild(priSel);
+    form.appendChild(inviTimeRow);
     form.appendChild(inp);
     form.appendChild(btn);
     addBox.appendChild(form);
@@ -2250,11 +2316,11 @@ function renderTodos() {
   }
 }
 
-function addTodo(projectId, title, priority) {
+function addTodo(projectId, title, priority, invi = false, time = null) {
   if (!projectId) return null;
   const maxOrder = state.todos.filter(t => t.projectId === projectId).reduce((m,t) => Math.max(m, t.order||0), -1);
   const id = uuid();
-  state.todos.push({ id, projectId, title, priority: priority || 'none', startDate: null, endDate: null, done: false, order: maxOrder+1 });
+  state.todos.push({ id, projectId, title, priority: priority || 'none', invi: !!invi, time: time || null, startDate: null, endDate: null, done: false, order: maxOrder+1 });
   scheduleSave(); render();
   return id;
 }
@@ -2291,6 +2357,75 @@ const PRIORITY_META = {
   none: { label: '미정', cls: 'priority-none' },
 };
 const PRIORITY_ORDER = { high: 0, mid: 1, low: 2, none: 3 };
+
+function getCalendarProjectOrder(projectId) {
+  const index = state.projects.findIndex(p => p.id === projectId);
+  return index < 0 ? Infinity : index;
+}
+
+function getCalendarTodoOrder(todo) {
+  const calOrder = Number(todo.calOrder);
+  if (todo.calOrder !== undefined && todo.calOrder !== null && Number.isFinite(calOrder)) return calOrder;
+  const todoOrder = Number(todo.order);
+  return Number.isFinite(todoOrder) ? todoOrder : 0;
+}
+
+function compareCalendarTodos(a, b) {
+  const inviOrder = Number(isInviTodo(b)) - Number(isInviTodo(a));
+  if (inviOrder !== 0) return inviOrder;
+
+  const projectA = getCalendarProjectOrder(a.projectId);
+  const projectB = getCalendarProjectOrder(b.projectId);
+  if (projectA !== projectB) return projectA - projectB;
+
+  const manualOrder = getCalendarTodoOrder(a) - getCalendarTodoOrder(b);
+  if (manualOrder !== 0) return manualOrder;
+
+  const todoOrder = (Number(a.order) || 0) - (Number(b.order) || 0);
+  if (todoOrder !== 0) return todoOrder;
+  const stateIndexA = state.todos.indexOf(a);
+  const stateIndexB = state.todos.indexOf(b);
+  if (stateIndexA >= 0 && stateIndexB >= 0 && stateIndexA !== stateIndexB) return stateIndexA - stateIndexB;
+  return String(a.id).localeCompare(String(b.id));
+}
+
+function canReorderCalendarTodos(source, target) {
+  return !!(source && target && source.startDate && target.startDate
+    && source.projectId === target.projectId
+    && isInviTodo(source) === isInviTodo(target));
+}
+
+function getNextCalendarTodoOrder(todo) {
+  const peerOrders = state.todos
+    .filter(peer => peer.startDate
+      && peer.projectId === todo.projectId
+      && isInviTodo(peer) === isInviTodo(todo))
+    .map(getCalendarTodoOrder);
+  return peerOrders.length > 0 ? Math.max(...peerOrders) + 1 : 0;
+}
+
+function moveCalendarTodo(sourceId, targetId, placeAfter = false) {
+  const source = state.todos.find(todo => todo.id === sourceId);
+  const target = state.todos.find(todo => todo.id === targetId);
+  if (!canReorderCalendarTodos(source, target) || source.id === target.id) return false;
+
+  const peers = state.todos
+    .filter(todo => todo.startDate
+      && todo.projectId === source.projectId
+      && isInviTodo(todo) === isInviTodo(source))
+    .sort(compareCalendarTodos);
+
+  const sourceIndex = peers.findIndex(todo => todo.id === source.id);
+  if (sourceIndex < 0) return false;
+  peers.splice(sourceIndex, 1);
+
+  let targetIndex = peers.findIndex(todo => todo.id === target.id);
+  if (targetIndex < 0) return false;
+  if (placeAfter) targetIndex += 1;
+  peers.splice(targetIndex, 0, source);
+  peers.forEach((todo, index) => { todo.calOrder = index; });
+  return true;
+}
 
 // ============================================================
 // 렌더링 — 패널 3: 캘린더 (5주 슬라이딩 윈도우)
@@ -2400,7 +2535,7 @@ function renderCalendar() {
             if (state.ctrlDragging) {
               const originId = todo.parentId || todo.id;
               const duration = todo.endDate ? Math.round((parseDate(todo.endDate) - parseDate(todo.startDate)) / 86400000) : 0;
-              const copy = { id: uuid(), projectId: todo.projectId, title: todo.title, parentId: originId, startDate: ds, endDate: addDays(ds, duration), done: false, order: todo.order };
+              const copy = { ...todo, id: uuid(), parentId: originId, startDate: ds, endDate: addDays(ds, duration), done: false, completedAt: null, calOrder: getNextCalendarTodoOrder(todo) };
               state.todos.push(copy);
             } else {
               const duration = todo.endDate ? Math.round((parseDate(todo.endDate) - parseDate(todo.startDate)) / 86400000) : 0;
@@ -2411,7 +2546,7 @@ function renderCalendar() {
             const originId = todo.parentId || todo.id;
             const alreadyScheduled = todo.startDate;
             if (alreadyScheduled) {
-              const copy = { id: uuid(), projectId: todo.projectId, title: todo.title, parentId: originId, startDate: ds, endDate: ds, done: false, order: todo.order };
+              const copy = { ...todo, id: uuid(), parentId: originId, startDate: ds, endDate: ds, done: false, completedAt: null, calOrder: getNextCalendarTodoOrder(todo) };
               state.todos.push(copy);
             } else {
               todo.startDate = ds;
@@ -2531,16 +2666,7 @@ function renderCalendar() {
     const todosThisWeek = [
       ...state.todos.filter(t => t.startDate && t.startDate <= weekSun && (t.endDate || t.startDate) >= weekMon),
       ...recurringThisWeek,
-    ].sort((a,b) => {
-      // 패널3 전용 순서(calOrder)가 있으면 우선, 없으면 기존 순서
-      const ca = (a.calOrder !== undefined && a.calOrder !== null) ? a.calOrder : Infinity;
-      const cb = (b.calOrder !== undefined && b.calOrder !== null) ? b.calOrder : Infinity;
-      if (ca !== cb) return ca - cb;
-      const pa = state.projects.findIndex(p => p.id === a.projectId);
-      const pb = state.projects.findIndex(p => p.id === b.projectId);
-      if (pa !== pb) return pa - pb;
-      return (a.order||0) - (b.order||0);
-    });
+    ].sort(compareCalendarTodos);
 
     // 열별로 다음 빈 레인 번호를 추적 (assign 이후부터 시작)
     // colNextLane[col] = 이 열에서 다음에 배치할 레인 인덱스 (0-based, assign 행 제외)
@@ -2575,7 +2701,7 @@ function renderCalendar() {
       const topPx = DAY_NUM_H + maxAssignInRange * (BAR_H + BAR_GAP) + laneIdx * (BAR_H + BAR_GAP);
 
       const bar = document.createElement('div');
-      bar.className = 'span-bar todo-bar' + (t.done ? ' done-block' : '');
+      bar.className = 'span-bar todo-bar' + (t.done ? ' done-block' : '') + (isInviTodo(t) ? ' invi-block' : '');
       if (!t.done) {
         bar.style.background = color.bg;
         bar.style.borderLeftColor = color.border;
@@ -2583,7 +2709,7 @@ function renderCalendar() {
       bar.style.top   = `${topPx}px`;
       const projName = proj ? proj.clientName : '';
       const hasMemo = !t._recurring && !!t.memo;
-      const timeLabel = !t._recurring && t.time && !isMobile()
+      const timeLabel = !t._recurring && t.time
         ? `<span class="cal-time-label" style="font-size:0.60rem;font-weight:700;flex-shrink:0;opacity:0.85">[${t.time}]</span>`
         : '';
       bar.innerHTML = `
@@ -2623,29 +2749,49 @@ function renderCalendar() {
           e.dataTransfer.effectAllowed = e.ctrlKey ? 'copy' : 'move';
         });
         bar.addEventListener('dragover', (e) => {
-          if (!state.draggingFromCalendar || state.draggingTodoId === t.id) return;
+          if (!state.draggingFromCalendar || state.ctrlDragging) return;
+          const source = state.todos.find(todo => todo.id === state.draggingTodoId);
+          if (source && source.id === t.id) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
+          if (!canReorderCalendarTodos(source, t)) return;
           e.preventDefault();
-          bar.style.outline = '2px dashed var(--primary)';
-        });
-        bar.addEventListener('dragleave', () => { bar.style.outline = ''; });
-        bar.addEventListener('drop', (e) => {
-          bar.style.outline = '';
-          const srcId = e.dataTransfer.getData('text/cal-sort');
-          if (!srcId || srcId === t.id || state.ctrlDragging) return;
           e.stopPropagation();
-          const src = state.todos.find(x => x.id === srcId);
-          const tgt = t;
-          if (!src || !tgt) return;
-          // calOrder 교환으로 순서 변경
-          const srcCal = src.calOrder !== undefined ? src.calOrder : (state.todos.indexOf(src));
-          const tgtCal = tgt.calOrder !== undefined ? tgt.calOrder : (state.todos.indexOf(tgt));
-          src.calOrder = tgtCal;
-          tgt.calOrder = srcCal;
+          const rect = bar.getBoundingClientRect();
+          const placeAfter = e.clientY >= rect.top + rect.height / 2;
+          bar.style.boxShadow = placeAfter
+            ? 'inset 0 -3px 0 var(--primary)'
+            : 'inset 0 3px 0 var(--primary)';
+        });
+        bar.addEventListener('dragleave', () => { bar.style.boxShadow = ''; });
+        bar.addEventListener('drop', (e) => {
+          bar.style.boxShadow = '';
+          const srcId = e.dataTransfer.getData('text/cal-sort');
+          if (!srcId || state.ctrlDragging) return;
+          const source = state.todos.find(todo => todo.id === srcId);
+          if (source && source.id === t.id) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
+          if (!canReorderCalendarTodos(source, t)) return;
+          e.preventDefault();
+          e.stopPropagation();
+          const rect = bar.getBoundingClientRect();
+          const placeAfter = e.clientY >= rect.top + rect.height / 2;
+          const moved = moveCalendarTodo(srcId, t.id, placeAfter);
           state.draggingTodoId = null;
           state.draggingFromCalendar = false;
-          scheduleSave(); render();
+          if (moved) { scheduleSave(); render(); }
         });
-        bar.addEventListener('dragend', () => { bar.style.outline = ''; state.draggingFromCalendar = false; state.ctrlDragging = false; });
+        bar.addEventListener('dragend', () => {
+          spanLayer.querySelectorAll('.todo-bar').forEach(b => { b.style.boxShadow = ''; });
+          state.draggingTodoId = null;
+          state.draggingFromCalendar = false;
+          state.ctrlDragging = false;
+        });
         bar.querySelector('.resize-handle').addEventListener('mousedown', (e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -2669,7 +2815,7 @@ function renderCalendar() {
             _isDraggingCal = false;
             state.calSortDraggingId = null;
             bar.style.opacity = '';
-            spanLayer.querySelectorAll('.todo-bar').forEach(b => { b.style.outline = ''; });
+            spanLayer.querySelectorAll('.todo-bar').forEach(b => { b.style.boxShadow = ''; });
           };
 
           bar.addEventListener('touchstart', (e) => {
@@ -2695,9 +2841,16 @@ function renderCalendar() {
             // 드래그 중 현재 위치의 다른 bar 하이라이트
             const el2 = document.elementFromPoint(e.touches[0].clientX, e.touches[0].clientY);
             const targetBar = el2 && el2.closest('.todo-bar[data-tid]');
-            spanLayer.querySelectorAll('.todo-bar').forEach(b => { b.style.outline = ''; });
+            spanLayer.querySelectorAll('.todo-bar').forEach(b => { b.style.boxShadow = ''; });
             if (targetBar && targetBar.dataset.tid !== t.id) {
-              targetBar.style.outline = '2px dashed var(--primary)';
+              const target = state.todos.find(todo => todo.id === targetBar.dataset.tid);
+              if (canReorderCalendarTodos(t, target)) {
+                const rect = targetBar.getBoundingClientRect();
+                const placeAfter = e.touches[0].clientY >= rect.top + rect.height / 2;
+                targetBar.style.boxShadow = placeAfter
+                  ? 'inset 0 -3px 0 var(--primary)'
+                  : 'inset 0 3px 0 var(--primary)';
+              }
             }
           }, { passive: false });
 
@@ -2712,15 +2865,11 @@ function renderCalendar() {
               const touch = e.changedTouches[0];
               const el2 = document.elementFromPoint(touch.clientX, touch.clientY);
               const targetBar = el2 && el2.closest('.todo-bar[data-tid]');
-              spanLayer.querySelectorAll('.todo-bar').forEach(b => { b.style.outline = ''; });
+              spanLayer.querySelectorAll('.todo-bar').forEach(b => { b.style.boxShadow = ''; });
               if (targetBar && targetBar.dataset.tid && targetBar.dataset.tid !== t.id) {
-                const src = state.todos.find(x => x.id === t.id);
-                const tgt = state.todos.find(x => x.id === targetBar.dataset.tid);
-                if (src && tgt) {
-                  const srcCal = src.calOrder !== undefined ? src.calOrder : state.todos.indexOf(src);
-                  const tgtCal = tgt.calOrder !== undefined ? tgt.calOrder : state.todos.indexOf(tgt);
-                  src.calOrder = tgtCal;
-                  tgt.calOrder = srcCal;
+                const rect = targetBar.getBoundingClientRect();
+                const placeAfter = touch.clientY >= rect.top + rect.height / 2;
+                if (moveCalendarTodo(t.id, targetBar.dataset.tid, placeAfter)) {
                   scheduleSave(); render();
                 }
               }
@@ -3007,11 +3156,7 @@ function getMobileDayTodos(date) {
     const endDate = todo.endDate || todo.startDate;
     return todo.startDate && todo.startDate <= date && endDate >= date;
   });
-  return [...scheduled, ...getRecurringForDate(date)].sort((a, b) => {
-    const aOrder = a.calOrder ?? a.order ?? 0;
-    const bOrder = b.calOrder ?? b.order ?? 0;
-    return aOrder - bOrder;
-  });
+  return [...scheduled, ...getRecurringForDate(date)].sort(compareCalendarTodos);
 }
 
 function renderMobileDayView() {
@@ -3033,15 +3178,16 @@ function renderMobileDayView() {
   todos.forEach(todo => {
     const project = state.projects.find(p => p.id === todo.projectId);
     const item = document.createElement(todo._recurring ? 'div' : 'button');
-    item.className = `mobile-day-todo${todo.done ? ' done' : ''}${todo._recurring ? ' recurring' : ''}`;
+    item.className = `mobile-day-todo${todo.done ? ' done' : ''}${todo._recurring ? ' recurring' : ''}${isInviTodo(todo) ? ' invi-block' : ''}`;
     if (!todo._recurring) item.type = 'button';
     const meta = [
-      todo._recurring ? '반복 일정' : (todo.time || ''),
+      todo._recurring ? '반복 일정' : '',
       !todo._recurring && todo.memo ? todo.memo : '',
     ].filter(Boolean).join('\n');
+    const titlePrefix = !todo._recurring && todo.time ? `[${todo.time}] ` : '';
     item.innerHTML = `
       <span class="mobile-day-todo-project">${project ? project.clientName : ''}${todo._recurring ? ' · 반복' : ''}</span>
-      <span class="mobile-day-todo-title">${todo.title}</span>
+      <span class="mobile-day-todo-title">${titlePrefix}${todo.title}</span>
       ${meta ? `<span class="mobile-day-todo-meta">${meta}</span>` : ''}
     `;
     if (!todo._recurring) {
@@ -3518,7 +3664,7 @@ function assignTodoToDateRange(todoId, start, end) {
     const originId = todo.parentId || todo.id;
     state.todos.push({ id: uuid(), projectId: todo.projectId, title: todo.title,
       parentId: originId, startDate: start, endDate: end, done: false, order: todo.order,
-      priority: todo.priority, calOrder: todo.calOrder, time: todo.time || null, memo: todo.memo || null, completedAt: null });
+      priority: todo.priority, calOrder: getNextCalendarTodoOrder(todo), invi: !!todo.invi, time: todo.time || null, memo: todo.memo || null, completedAt: null });
   } else {
     todo.startDate = start;
     todo.endDate = end;
@@ -3674,6 +3820,7 @@ function openTodoDetailModal(todoId) {
   document.getElementById('input-todo-detail-title').value = origin.title;
   document.getElementById('select-todo-detail-priority').value = origin.priority || 'none';
   document.getElementById('input-todo-detail-time').value = origin.time || '';
+  document.getElementById('input-todo-detail-invi').checked = !!origin.invi;
   document.getElementById('input-todo-detail-memo').value = origin.memo || '';
 
   document.getElementById('btn-todo-detail-add-schedule').onclick = () => {
@@ -3686,6 +3833,7 @@ function openTodoDetailModal(todoId) {
     const newPriority = document.getElementById('select-todo-detail-priority').value;
     const newProjectId= projSel.value;
     const time = document.getElementById('input-todo-detail-time').value || null;
+    const invi = document.getElementById('input-todo-detail-invi').checked;
     const memo = document.getElementById('input-todo-detail-memo').value.trim() || null;
     state.todos.forEach(x => {
       if (x.id === originId || x.parentId === originId) {
@@ -3693,6 +3841,7 @@ function openTodoDetailModal(todoId) {
         x.priority  = newPriority;
         x.projectId = newProjectId;
         x.time = time;
+        x.invi = invi;
         x.memo = memo;
       }
     });
