@@ -186,9 +186,9 @@
     transition: box-shadow 0.15s;
     position: relative;
   }
-  .todo-item.invi-block,
-  .span-bar.todo-bar.invi-block,
-  .mobile-day-todo.invi-block {
+  .todo-item.invi-block:not(.done-item),
+  .span-bar.todo-bar.invi-block:not(.done-block),
+  .mobile-day-todo.invi-block:not(.done) {
     border: 3px solid #dc2626 !important;
   }
   .todo-item-row {
@@ -508,9 +508,6 @@
     background: transparent !important;
     border: 1px dotted #bbb !important;
     border-left: 1px dotted #bbb !important;
-  }
-  .span-bar.todo-bar.done-block.invi-block {
-    border: 3px solid #dc2626 !important;
   }
   .span-bar.todo-bar.done-block .span-todo-title { text-decoration: line-through; color: var(--done-text); }
 
@@ -2373,6 +2370,10 @@ function getCalendarTodoOrder(todo) {
 function compareCalendarTodos(a, b) {
   const inviOrder = Number(isInviTodo(b)) - Number(isInviTodo(a));
   if (inviOrder !== 0) return inviOrder;
+  if (isInviTodo(a) && isInviTodo(b)) {
+    const timeOrder = a.time.localeCompare(b.time);
+    if (timeOrder !== 0) return timeOrder;
+  }
 
   const projectA = getCalendarProjectOrder(a.projectId);
   const projectB = getCalendarProjectOrder(b.projectId);
