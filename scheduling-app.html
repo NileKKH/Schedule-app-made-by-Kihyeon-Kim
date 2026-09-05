@@ -3223,6 +3223,7 @@ function showMobileTodoMenu(todo, clientX, clientY) {
       scheduleSave(); render(); refreshMobileDayView();
     }},
     { label: '🔍 상세 보기 / 메모', action: () => openTodoDetailModal(todo.id) },
+    { label: '내용 수정', action: () => openEditTodoModal(originId) },
     { label: '일정에서 제거', action: () => {
       if (todo.parentId) { state.todos = state.todos.filter(x => x.id !== todo.id); }
       else { todo.startDate = null; todo.endDate = null; }
@@ -4034,6 +4035,9 @@ async function init() {
 }
 
 window.addEventListener('resize', () => {
+  // 창 크기 변경/줌/모니터 이동 시 bar 위치 재계산 (PC·모바일 공통)
+  requestAnimationFrame(() => _allBarPositionFns.forEach(fn => fn()));
+
   if (!isMobile()) return;
   // 입력창에 포커스가 있을 때(키보드 팝업으로 인한 resize)는 탭 전환 무시
   const focused = document.activeElement;
