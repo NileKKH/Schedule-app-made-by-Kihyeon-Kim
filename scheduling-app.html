@@ -46,18 +46,20 @@
     box-shadow: 0 2px 6px rgba(0,0,0,0.15);
   }
   #header h1 { font-size: 1rem; font-weight: 600; letter-spacing: 0.5px; }
-  #feedback-btn {
+  #memo-btn, #feedback-btn {
     background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.45);
     color: #fff; border-radius: var(--radius); padding: 5px 10px; cursor: pointer;
-    font: inherit; font-size: 0.78rem; margin-left: auto; width: auto; height: 28px;
+    font: inherit; font-size: 0.78rem; width: auto; height: 28px;
     display: inline-flex; align-items: center; justify-content: center; white-space: nowrap;
   }
-  #feedback-btn:hover { background: rgba(255,255,255,0.28); }
-  #feedback-count {
+  #memo-btn { margin-left: auto; }
+  #memo-btn:hover, #feedback-btn:hover { background: rgba(255,255,255,0.28); }
+  #memo-count, #feedback-count {
     display: inline-flex; align-items: center; justify-content: center; min-width: 16px; height: 16px;
     margin-left: 4px; padding: 0 4px; border-radius: 8px; background: #fff; color: var(--primary); font-size: 0.68rem;
   }
-  #feedback-count:empty { display: none; }
+  #memo-count { color: #b8860b; }
+  #memo-count:empty, #feedback-count:empty { display: none; }
   #sync-status { font-size: 0.68rem; color: rgba(255,255,255,0.75); }
   #sync-status.error { color: #ffd4d4; }
 
@@ -612,6 +614,15 @@
   .feedback-item-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 8px; }
   .feedback-item-actions button { background: none; border: none; cursor: pointer; color: var(--primary); font: inherit; font-size: 0.75rem; padding: 2px; }
   .feedback-item-actions .feedback-delete { color: #c23b3b; }
+
+  .memo-item { border: 1px solid var(--border); border-left: 3px solid var(--yellow-border); padding: 10px; border-radius: var(--radius); background: #fffdf5; }
+  .memo-item.cleared { border-left-color: #9aa0a6; background: transparent; opacity: 0.7; }
+  .memo-item-text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.85rem; line-height: 1.45; }
+  .memo-item.cleared .memo-item-text { text-decoration: line-through; color: var(--done-text); }
+  .memo-item-meta { margin-top: 7px; color: var(--text-muted); font-size: 0.72rem; }
+  .memo-item-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 8px; }
+  .memo-item-actions button { background: none; border: none; cursor: pointer; color: #b8860b; font: inherit; font-size: 0.75rem; padding: 2px; }
+  .memo-item-actions .memo-delete { color: #c23b3b; }
   .mobile-day-todo {
     width: 100%; text-align: left; padding: 12px; border: 1px solid var(--border);
     border-left: 3px solid var(--primary); border-radius: var(--radius); background: #fff;
@@ -1036,6 +1047,7 @@
   <h1>📋 일정관리</h1>
   <div id="watermark">made by Kihyeon Kim</div>
   <span id="sync-status" aria-live="polite"></span>
+  <button id="memo-btn" type="button">메모<span id="memo-count"></span></button>
   <button id="feedback-btn" type="button">피드백<span id="feedback-count"></span></button>
 </div>
 
@@ -1101,6 +1113,22 @@
 
 <!-- ===== 컨텍스트 메뉴 ===== -->
 <div id="ctx-menu"></div>
+
+<!-- ===== 모달: 메모 ===== -->
+<div class="modal-overlay" id="modal-memo">
+  <div class="modal" style="width:min(520px,95vw);">
+    <h2>메모</h2>
+    <label for="input-memo">나중에 정리해서 반영할 것</label>
+    <textarea id="input-memo" rows="4" placeholder="예: 프로젝트 색상 커스터마이징 나중에 검토" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);font:inherit;font-size:0.85rem;resize:vertical;"></textarea>
+    <div class="modal-btns" style="margin-top:8px;">
+      <button class="btn-primary" id="btn-save-memo">등록</button>
+    </div>
+    <div id="memo-list" style="display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto;margin-top:16px;"></div>
+    <div class="modal-btns" style="margin-top:14px;">
+      <button class="btn-secondary" onclick="closeModal('modal-memo')">닫기</button>
+    </div>
+  </div>
+</div>
 
 <!-- ===== 모달: 피드백 ===== -->
 <div class="modal-overlay" id="modal-feedback">
@@ -1399,6 +1427,7 @@ let state = {
   todos: [],             // { id, projectId, title, startDate, endDate, done, order, parentId? }
   recurringTodos: [],    // { id, projectId, title, weekdays: [0-6 mon=0], startDate, endDate }
   feedback: [],          // { id, text, createdAt, resolvedAt }
+  memo: [],              // { id, text, createdAt, clearedAt }
   currentYear: new Date().getFullYear(),
   currentMonth: new Date().getMonth(), // 0-based
   calendarStartDate: null, // 5주 윈도우 시작일 (ISO, 월요일 기준)
@@ -1522,7 +1551,7 @@ function getRecurringForDate(ds) {
 // ============================================================
 // GitHub Gist API
 // ============================================================
-const DATA_KEYS = ['projects', 'weekAssignments', 'todos', 'recurringTodos', 'feedback'];
+const DATA_KEYS = ['projects', 'weekAssignments', 'todos', 'recurringTodos', 'feedback', 'memo'];
 
 function getSchedulePayload() {
   return {
@@ -1531,6 +1560,7 @@ function getSchedulePayload() {
     todos: state.todos,
     recurringTodos: state.recurringTodos,
     feedback: state.feedback,
+    memo: state.memo,
   };
 }
 
@@ -1801,7 +1831,7 @@ async function createNewGist(token) {
     body: JSON.stringify({
       description: 'PwC 일정관리 데이터',
       public: false,
-      files: { 'schedule.json': { content: JSON.stringify({ projects:[], weekAssignments:[], todos:[], recurringTodos:[], feedback:[] }, null, 2) } }
+      files: { 'schedule.json': { content: JSON.stringify({ projects:[], weekAssignments:[], todos:[], recurringTodos:[], feedback:[], memo:[] }, null, 2) } }
     })
   });
   if (!res.ok) throw new Error('토큰이 올바르지 않거나 gist 권한이 없습니다.');
@@ -2995,6 +3025,79 @@ document.getElementById('btn-save-feedback').addEventListener('click', () => {
   input.focus();
 });
 
+function updateMemoCount() {
+  const uncheckedCount = state.memo.filter(item => !item.clearedAt).length;
+  document.getElementById('memo-count').textContent = uncheckedCount || '';
+}
+
+function renderMemoList() {
+  const list = document.getElementById('memo-list');
+  list.innerHTML = '';
+  const items = [...state.memo].sort((a, b) => {
+    if (!!a.clearedAt !== !!b.clearedAt) return a.clearedAt ? 1 : -1;
+    return new Date(b.createdAt) - new Date(a.createdAt);
+  });
+
+  if (items.length === 0) {
+    const empty = document.createElement('p');
+    empty.textContent = '등록된 메모가 없습니다.';
+    empty.style.cssText = 'font-size:0.82rem;color:var(--text-muted);text-align:center;padding:16px 0;';
+    list.appendChild(empty);
+    return;
+  }
+
+  items.forEach(item => {
+    const row = document.createElement('div');
+    row.className = `memo-item${item.clearedAt ? ' cleared' : ''}`;
+    const text = document.createElement('div');
+    text.className = 'memo-item-text';
+    text.textContent = item.text;
+    const meta = document.createElement('div');
+    meta.className = 'memo-item-meta';
+    meta.textContent = item.clearedAt
+      ? `등록 ${formatFeedbackDate(item.createdAt)} · 반영 ${formatFeedbackDate(item.clearedAt)}`
+      : `등록 ${formatFeedbackDate(item.createdAt)} · 미반영`;
+    const actions = document.createElement('div');
+    actions.className = 'memo-item-actions';
+    const clear = document.createElement('button');
+    clear.type = 'button';
+    clear.textContent = item.clearedAt ? 'clear 취소' : 'clear';
+    clear.addEventListener('click', () => {
+      item.clearedAt = item.clearedAt ? null : new Date().toISOString();
+      scheduleSave(); renderMemoList(); updateMemoCount();
+    });
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'memo-delete';
+    remove.textContent = '삭제';
+    remove.addEventListener('click', () => {
+      state.memo = state.memo.filter(entry => entry.id !== item.id);
+      scheduleSave(); renderMemoList(); updateMemoCount();
+    });
+    actions.append(clear, remove);
+    row.append(text, meta, actions);
+    list.appendChild(row);
+  });
+}
+
+function openMemoModal() {
+  document.getElementById('input-memo').value = '';
+  renderMemoList();
+  openModal('modal-memo');
+  document.getElementById('input-memo').focus();
+}
+
+document.getElementById('memo-btn').addEventListener('click', openMemoModal);
+document.getElementById('btn-save-memo').addEventListener('click', () => {
+  const input = document.getElementById('input-memo');
+  const text = input.value.trim();
+  if (!text) return;
+  state.memo.push({ id: uuid(), text, createdAt: new Date().toISOString(), clearedAt: null });
+  input.value = '';
+  scheduleSave(); renderMemoList(); updateMemoCount();
+  input.focus();
+});
+
 // 프로젝트 모달
 document.getElementById('btn-save-project').addEventListener('click', () => {
   const name = document.getElementById('input-project-name').value.trim();
@@ -3308,6 +3411,7 @@ function render() {
   renderTodos();
   renderCalendar();
   updateFeedbackCount();
+  updateMemoCount();
 }
 
 // ============================================================
