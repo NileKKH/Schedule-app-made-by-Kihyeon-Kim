@@ -1038,6 +1038,9 @@
   .rp-ocr-block .rp-block-text:empty:before { content: attr(data-placeholder); color: #bbb; }
   .rp-ocr-loading { color: #999; font-style: italic; cursor: default; user-select: none; }
   .rp-block.dragging { opacity: .4; }
+  .rp-block.rp-block-selected { background: rgba(35,131,226,.14); border-radius: 4px; }
+  .rp-unchecked-badge { font-size: 12px; font-weight: 700; color: #dc3545; flex-shrink: 0; }
+  .proj-unchecked-badge { font-size: 0.72rem; font-weight: 700; color: #dc3545; flex-shrink: 0; margin-right: 2px; }
   #rp-slash-menu { position: fixed; display: none; background: #fff; border: 1px solid #e5e5e5; border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,.12); z-index: 8050; min-width: 190px; max-width: 90vw; padding: 4px; font-size: 13px; }
   .rp-slash-item { padding: 7px 10px; border-radius: 5px; cursor: pointer; display: flex; align-items: center; gap: 8px; }
   .rp-slash-item .rp-si-icon { width: 22px; text-align: center; color: #888; font-size: 11px; font-weight: 700; }
@@ -2023,7 +2026,8 @@ function renderProjects() {
     const div = document.createElement('div');
     div.className = 'project-item' + (state.activeProjectFilter === p.id ? ' active' : '') + (p.closedAt ? ' closed' : '');
     div.dataset.pid = p.id;
-    div.innerHTML = `<span class="proj-drag-handle" title="드래그하여 순서 변경">⠿</span><span class="proj-name">${p.clientName}</span><button type="button" class="proj-menu-btn" title="프로젝트 메뉴">⋮</button>`;
+    const uncheckedCount = rpCountUnchecked(p);
+    div.innerHTML = `<span class="proj-drag-handle" title="드래그하여 순서 변경">⠿</span><span class="proj-name">${p.clientName}</span>${uncheckedCount > 0 ? `<span class="proj-unchecked-badge">${uncheckedCount}</span>` : ''}<button type="button" class="proj-menu-btn" title="프로젝트 메뉴">⋮</button>`;
     div.querySelector('.proj-name').addEventListener('click', () => {
       state.activeProjectFilter = (state.activeProjectFilter === p.id) ? null : p.id;
       render();
@@ -3632,6 +3636,44 @@ function rpEnsureBlocks(p) {
   if (!p.blocks.el) p.blocks.el = rpEmptyBlocks();
 }
 function rpGetProject() { return state.projects.find(p => p.id === rpCurrentId); }
+function rpCountUnchecked(project) {
+  if (!project || !project.blocks) return 0;
+  let count = 0;
+  ['memo', 'iv', 'el'].forEach(tabId => {
+    const blocks = project.blocks[tabId];
+    if (!blocks) return;
+    blocks.forEach(b => { if (b.type === 'checkbox' && !b.checked) count++; });
+  });
+  return count;
+}
+function rpUpdateUncheckedBadge() {
+  const badge = document.getElementById('rp-unchecked-badge');
+  if (!badge) return;
+  const p = rpGetProject();
+  const n = rpCountUnchecked(p);
+  badge.textContent = n > 0 ? String(n) : '';
+}
+function rpUpdateAllProjectBadges() {
+  const el = document.getElementById('project-scroll');
+  if (!el) return;
+  el.querySelectorAll(':scope > .project-item').forEach(div => {
+    const p = state.projects.find(x => x.id === div.dataset.pid);
+    if (!p) return;
+    const n = rpCountUnchecked(p);
+    let badge = div.querySelector('.proj-unchecked-badge');
+    if (n > 0) {
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'proj-unchecked-badge';
+        const menuBtn = div.querySelector('.proj-menu-btn');
+        div.insertBefore(badge, menuBtn);
+      }
+      badge.textContent = String(n);
+    } else if (badge) {
+      badge.remove();
+    }
+  });
+}
 
 function rpOpenPanel(pid) {
   const p = state.projects.find(x => x.id === pid);
@@ -3641,6 +3683,7 @@ function rpOpenPanel(pid) {
   rpActiveTab = 'memo';
   rpUndoStack = [];
   rpRedoStack = [];
+  rpClearBlockSelection();
   document.getElementById('rp-dim').classList.add('show');
   document.getElementById('rp-panel').classList.add('show');
   document.getElementById('rp-panel').style.width = (rpPanelWidth && window.innerWidth > 640) ? (rpPanelWidth + 'px') : '';
@@ -3653,6 +3696,7 @@ function rpClosePanel() {
   document.getElementById('rp-panel').classList.remove('show');
   rpCloseSlashMenu();
   rpCloseFormatMenu();
+  rpClearBlockSelection();
   rpCurrentId = null;
 }
 function rpSwitchTab(t) {
@@ -3660,6 +3704,7 @@ function rpSwitchTab(t) {
   rpSaveAll();
   rpCloseSlashMenu();
   rpCloseFormatMenu();
+  rpClearBlockSelection();
   rpActiveTab = t;
   rpRenderPanel();
 }
@@ -3721,6 +3766,7 @@ function rpRenderPanel() {
       <div class="rp-phead-status">
         <span class="rp-status-badge${statusClosed ? ' closed' : ''}">${statusClosed ? '종료' : '진행중'}</span>
         <button type="button" class="rp-status-btn" id="rp-status-btn">${statusClosed ? '재개' : '종료'}</button>
+        <span class="rp-unchecked-badge" id="rp-unchecked-badge"></span>
         <button type="button" class="rp-close-btn" id="rp-close-btn">✕</button>
       </div>
     </div>
@@ -3742,6 +3788,7 @@ function rpRenderPanel() {
   });
   rpInitResizeHandle();
   rpRenderBlocks(rpActiveTab);
+  rpUpdateUncheckedBadge();
 }
 
 function rpRenderBlocks(tabId) {
@@ -3822,6 +3869,8 @@ function rpUndo() {
   rpCloseSlashMenu();
   rpCloseFormatMenu();
   rpRenderBlocks(rpActiveTab);
+  rpUpdateUncheckedBadge();
+  renderProjects();
 }
 function rpRedo() {
   clearTimeout(rpSaveTimer);
@@ -3833,12 +3882,15 @@ function rpRedo() {
   rpCloseSlashMenu();
   rpCloseFormatMenu();
   rpRenderBlocks(rpActiveTab);
+  rpUpdateUncheckedBadge();
+  renderProjects();
 }
 
 function rpRunOcr(dataUrl, loadingBlock) {
   const pid = rpCurrentId;
   const tab = rpActiveTab;
   const finish = text => {
+    if (loadingBlock.dataset.rpDeleted === '1') return; // 다중선택 삭제로 이미 지워진 블록: 부활 스킵
     if (document.contains(loadingBlock) && rpCurrentId === pid && rpActiveTab === tab) {
       const ocrBlock = rpCreateBlockEl({ type: 'ocr', text: text || '', indent: 0 });
       loadingBlock.replaceWith(ocrBlock);
@@ -4074,6 +4126,50 @@ document.addEventListener('dragend', () => {
   }
 });
 
+// ---- 블록 다중 선택(드래그) ----
+let rpBlockSelDown = false;
+let rpBlockSelActive = false;
+let rpBlockSelStartEl = null;
+function rpClearBlockSelection() {
+  const container = document.getElementById('rp-block-container');
+  if (container) container.querySelectorAll('.rp-block-selected').forEach(el => el.classList.remove('rp-block-selected'));
+  rpBlockSelActive = false;
+}
+function rpUpdateBlockSelectionRange(container, startEl, curEl) {
+  const children = Array.from(container.children).filter(c => c.classList.contains('rp-block'));
+  const startIdx = children.indexOf(startEl);
+  const curIdx = children.indexOf(curEl);
+  if (startIdx === -1 || curIdx === -1) return;
+  const lo = Math.min(startIdx, curIdx), hi = Math.max(startIdx, curIdx);
+  children.forEach((c, i) => c.classList.toggle('rp-block-selected', i >= lo && i <= hi));
+}
+document.addEventListener('mousedown', e => {
+  if (rpBlockSelActive) rpClearBlockSelection();
+  const container = document.getElementById('rp-block-container');
+  if (!container || !container.contains(e.target) || (e.target.closest && e.target.closest('.rp-drag-handle'))) {
+    rpBlockSelDown = false;
+    rpBlockSelStartEl = null;
+    return;
+  }
+  rpBlockSelDown = true;
+  rpBlockSelStartEl = e.target.closest('.rp-block');
+});
+document.addEventListener('mousemove', e => {
+  if (!rpBlockSelDown || !rpBlockSelStartEl) return;
+  const container = rpBlockSelStartEl.parentElement;
+  if (!container) return;
+  const overEl = document.elementFromPoint(e.clientX, e.clientY);
+  const curBlock = overEl && overEl.closest ? overEl.closest('.rp-block') : null;
+  if (!curBlock || curBlock.parentElement !== container) return;
+  if (curBlock === rpBlockSelStartEl && !rpBlockSelActive) return;
+  rpBlockSelActive = true;
+  window.getSelection().removeAllRanges();
+  rpUpdateBlockSelectionRange(container, rpBlockSelStartEl, curBlock);
+});
+document.addEventListener('mouseup', () => {
+  rpBlockSelDown = false;
+});
+
 document.addEventListener('input', e => {
   const target = e.target;
   if (!target.classList || !target.classList.contains('rp-block-text')) return;
@@ -4088,7 +4184,11 @@ document.addEventListener('input', e => {
   rpScheduleSaveLocal();
 });
 document.addEventListener('change', e => {
-  if (e.target.classList && e.target.classList.contains('rp-cbox')) rpSaveAll();
+  if (e.target.classList && e.target.classList.contains('rp-cbox')) {
+    rpSaveAll();
+    rpUpdateUncheckedBadge();
+    rpUpdateAllProjectBadges();
+  }
 });
 document.addEventListener('contextmenu', e => {
   const sel = window.getSelection();
@@ -4141,6 +4241,24 @@ document.addEventListener('click', e => {
 });
 document.addEventListener('keydown', e => {
   if (rpCurrentId === null) return;
+  if (rpBlockSelActive && (e.key === 'Delete' || e.key === 'Backspace')) {
+    e.preventDefault();
+    const container = document.getElementById('rp-block-container');
+    if (container) {
+      container.querySelectorAll('.rp-block-selected').forEach(el => {
+        if (el.dataset.type === 'ocrloading') el.dataset.rpDeleted = '1';
+        el.remove();
+      });
+      if (container.children.length === 0) {
+        container.appendChild(rpCreateBlockEl({ type: 'p', text: '', indent: 0 }));
+      }
+    }
+    rpBlockSelActive = false;
+    rpSaveAll();
+    rpUpdateUncheckedBadge();
+    renderProjects();
+    return;
+  }
   const ctrl = e.ctrlKey || e.metaKey;
   if (ctrl && !e.shiftKey && (e.key === 'z' || e.key === 'Z')) { e.preventDefault(); rpUndo(); return; }
   if (ctrl && e.shiftKey && (e.key === 'y' || e.key === 'Y')) { e.preventDefault(); rpRedo(); return; }
