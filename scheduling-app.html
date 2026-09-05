@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>일정관리 by Kihyeon Kim</title>
+<script defer src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.5/dist/tesseract.min.js"></script>
 <style>
   /* ===== 기본 리셋 & 변수 ===== */
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -978,6 +979,84 @@
     }
 
   }
+
+  /* ===== PJT 상세 슬라이드 패널 (rp-) ===== */
+  #rp-dim {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.25);
+    opacity: 0; pointer-events: none;
+    transition: opacity .25s;
+    z-index: 8000;
+  }
+  #rp-dim.show { opacity: 1; pointer-events: auto; }
+  #rp-panel {
+    position: fixed; top: 0; right: 0; height: 100%;
+    width: 480px; max-width: 94vw;
+    background: #fff;
+    box-shadow: -4px 0 24px rgba(0,0,0,.15);
+    transform: translateX(100%);
+    transition: transform .28s cubic-bezier(.2,.8,.2,1);
+    z-index: 8001;
+    display: flex; flex-direction: column;
+  }
+  #rp-panel.show { transform: translateX(0); }
+  .rp-resize-handle { position: absolute; top: 0; left: -4px; width: 8px; height: 100%; cursor: ew-resize; z-index: 5; }
+  .rp-resize-handle:hover { background: rgba(0,0,0,.06); }
+  .rp-phead { padding: 18px 22px 12px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: flex-start; flex-shrink: 0; gap: 8px; }
+  .rp-phead-name { flex: 1; min-width: 0; }
+  .rp-name-input { width: 100%; font-size: 16px; font-weight: 700; border: none; outline: none; padding: 3px 4px; font-family: inherit; background: transparent; border-radius: 4px; }
+  .rp-name-input:hover, .rp-name-input:focus { background: #f5f5f5; }
+  .rp-phead-status { display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-top: 2px; }
+  .rp-status-badge { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 12px; background: #e5f5fb; color: #0b6e99; white-space: nowrap; }
+  .rp-status-badge.closed { background: #f1f1f1; color: #888; }
+  .rp-status-btn { border: 1px solid #ddd; background: #fff; border-radius: 6px; padding: 4px 9px; font-size: 11px; cursor: pointer; font-family: inherit; white-space: nowrap; }
+  .rp-status-btn:hover { background: #f5f5f5; }
+  .rp-close-btn { border: none; background: #f2f2f2; width: 26px; height: 26px; border-radius: 50%; cursor: pointer; font-size: 13px; flex-shrink: 0; }
+  .rp-close-btn:hover { background: #e5e5e5; }
+  .rp-pbody { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 12px 22px 30px; display: flex; flex-direction: column; min-height: 0; }
+  .rp-tabbar { display: flex; gap: 2px; margin: 4px 0 10px; background: #f2f2f2; padding: 3px; border-radius: 7px; flex-shrink: 0; }
+  .rp-tabbar button { flex: 1; border: none; background: transparent; padding: 7px 2px; font-size: 12.5px; border-radius: 5px; cursor: pointer; color: #666; font-family: inherit; white-space: nowrap; }
+  .rp-tabbar button.active { background: #fff; color: #111; box-shadow: 0 1px 2px rgba(0,0,0,.08); font-weight: 600; }
+  .rp-hint { font-size: 11px; color: #bbb; padding: 0 2px 8px; flex-shrink: 0; }
+  #rp-block-container { flex: 1; padding-top: 4px; padding-bottom: 40px; }
+  .rp-block { position: relative; margin-bottom: 2px; display: flex; align-items: flex-start; gap: 6px; }
+  .rp-drag-handle { width: 14px; flex-shrink: 0; text-align: center; color: #ccc; font-size: 12px; line-height: 1.55; cursor: grab; opacity: 0; padding-top: 3px; user-select: none; }
+  .rp-block:hover .rp-drag-handle { opacity: 1; }
+  .rp-block-text { flex: 1; outline: none; font-size: 14px; line-height: 1.55; padding: 3px 4px; border-radius: 4px; min-height: 1.55em; overflow-wrap: anywhere; }
+  .rp-block-text:hover { background: #fafafa; }
+  .rp-block-text:focus { background: #f7f8fa; }
+  .rp-block-text:focus:empty:before { content: attr(data-placeholder); color: #bbb; }
+  .rp-block[data-type="h1"] .rp-block-text { font-size: 1.5em; font-weight: 700; }
+  .rp-block[data-type="h2"] .rp-block-text { font-size: 1.25em; font-weight: 700; }
+  .rp-block[data-type="h3"] .rp-block-text { font-size: 1.08em; font-weight: 700; }
+  .rp-block[data-type="bullet"] .rp-bdot { padding: 3px 0; color: #666; font-size: 14px; line-height: 1.55; }
+  .rp-block[data-type="checkbox"] .rp-cbox { margin-top: 8px; width: 15px; height: 15px; flex-shrink: 0; }
+  .rp-block[data-type="checkbox"] .rp-cbox:checked ~ .rp-block-text { text-decoration: line-through; color: #aaa; }
+  .rp-ocr-block { flex: 1; min-width: 0; border: 1px solid #e3d9b8; background: #fdf9ec; border-radius: 6px; padding: 8px 10px; }
+  .rp-ocr-label { font-size: 10.5px; color: #a68a3c; margin-bottom: 4px; }
+  .rp-ocr-block .rp-block-text { padding: 0; }
+  .rp-ocr-block .rp-block-text:empty:before { content: attr(data-placeholder); color: #bbb; }
+  .rp-ocr-loading { color: #999; font-style: italic; cursor: default; user-select: none; }
+  .rp-block.dragging { opacity: .4; }
+  #rp-slash-menu { position: fixed; display: none; background: #fff; border: 1px solid #e5e5e5; border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,.12); z-index: 8050; min-width: 190px; max-width: 90vw; padding: 4px; font-size: 13px; }
+  .rp-slash-item { padding: 7px 10px; border-radius: 5px; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+  .rp-slash-item .rp-si-icon { width: 22px; text-align: center; color: #888; font-size: 11px; font-weight: 700; }
+  .rp-slash-item.sel, .rp-slash-item:hover { background: #f1f1ef; }
+  #rp-format-menu { position: fixed; display: none; background: #222; color: #fff; border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,.25); z-index: 8050; padding: 6px; font-size: 12px; max-width: 90vw; }
+  .rp-fm-item { padding: 6px 10px; border-radius: 5px; cursor: pointer; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .rp-fm-item:hover { background: #3a3a3a; }
+  .rp-fm-label { font-size: 10px; color: #999; padding: 5px 8px 0; }
+  .rp-fm-color-row { display: flex; gap: 6px; padding: 4px 8px 6px; }
+  .rp-swatch { width: 16px; height: 16px; border-radius: 50%; cursor: pointer; border: 1px solid rgba(255,255,255,.3); }
+  @media (max-width: 640px) {
+    #rp-panel { width: 100vw; max-width: 100vw; }
+    .rp-phead { padding: 14px 14px 10px; flex-wrap: wrap; }
+    .rp-pbody { padding: 10px 14px 24px; }
+    .rp-name-input { font-size: 15px; }
+    .rp-tabbar button { font-size: 11px; padding: 7px 0; }
+    .rp-hint { display: none; }
+    .rp-resize-handle { display: none; }
+  }
 </style>
 </head>
 <body>
@@ -1113,6 +1192,10 @@
 
 <!-- ===== 컨텍스트 메뉴 ===== -->
 <div id="ctx-menu"></div>
+
+<!-- ===== PJT 상세 슬라이드 패널 ===== -->
+<div id="rp-dim"></div>
+<div id="rp-panel"></div>
 
 <!-- ===== 모달: 메모 ===== -->
 <div class="modal-overlay" id="modal-memo">
@@ -1949,6 +2032,7 @@ function renderProjects() {
       e.stopPropagation();
       showCtxMenu({ clientX: e.clientX, clientY: e.clientY, preventDefault: () => {} }, getProjectCtxItems(p));
     });
+    div.addEventListener('dblclick', () => rpOpenPanel(p.id));
     attachProjectCtx(div, p);
     el.appendChild(div);
   });
@@ -3500,6 +3584,598 @@ function deleteProject(pid) {
   if (state.activeProjectFilter === pid) state.activeProjectFilter = null;
   scheduleSave(); render();
 }
+
+// ============================================================
+// PJT 상세 슬라이드 패널 (메모/인터뷰/EL·PM 코멘트 블록 에디터)
+// state.projects[i].blocks = { memo:[...], iv:[...], el:[...] } 를
+// 기존 저장 로직(scheduleSave → localStorage/Gist)에 그대로 얹어서 저장한다.
+// ============================================================
+const RP_TABS = [
+  { id: 'memo', label: '📝 메모' },
+  { id: 'iv', label: '🗣️ 인터뷰' },
+  { id: 'el', label: '🧑‍💼 EL·PM 코멘트' },
+];
+const RP_SLASH_ITEMS = [
+  { type: 'h1', label: '제목 1', icon: 'H1' },
+  { type: 'h2', label: '제목 2', icon: 'H2' },
+  { type: 'h3', label: '제목 3', icon: 'H3' },
+  { type: 'bullet', label: '글머리 기호 목록', icon: '•' },
+  { type: 'checkbox', label: '체크박스', icon: '☑' },
+];
+const RP_COLORS = ['#e03e3e', '#e8a33d', '#2f9e44', '#1971c2', '#7048e8', '#495057'];
+const RP_HILITE_COLORS = ['#fff3bf', '#ffe3e3', '#d3f9d8', '#d0ebff', '#eebefa', '#e9ecef'];
+const RP_MARKDOWN_RULES = [
+  { re: /^###\s(.*)$/, type: 'h3' },
+  { re: /^##\s(.*)$/, type: 'h2' },
+  { re: /^#\s(.*)$/, type: 'h1' },
+  { re: /^[-*]\s(.*)$/, type: 'bullet' },
+  { re: /^\[\s?\]\s(.*)$/, type: 'checkbox' },
+];
+
+let rpCurrentId = null;
+let rpActiveTab = 'memo';
+let rpUndoStack = [];
+let rpRedoStack = [];
+let rpSaveTimer = null;
+let rpDraggedWrapper = null;
+let rpIsResizingPanel = false, rpResizeStartX = 0, rpResizeStartWidth = 0;
+let rpPanelWidth = null;
+try { const w = localStorage.getItem('rp_panel_width'); if (w) rpPanelWidth = Number(w); } catch (e) {}
+let rpSlashMenuEl = null, rpSlashMenuTarget = null, rpSlashSelIdx = 0, rpSlashFiltered = RP_SLASH_ITEMS;
+let rpFormatMenuEl = null, rpSavedRange = null;
+
+function rpEmptyBlocks() { return [{ type: 'p', text: '', indent: 0 }]; }
+function rpEnsureBlocks(p) {
+  if (!p.blocks) p.blocks = {};
+  if (!p.blocks.memo) p.blocks.memo = rpEmptyBlocks();
+  if (!p.blocks.iv) p.blocks.iv = rpEmptyBlocks();
+  if (!p.blocks.el) p.blocks.el = rpEmptyBlocks();
+}
+function rpGetProject() { return state.projects.find(p => p.id === rpCurrentId); }
+
+function rpOpenPanel(pid) {
+  const p = state.projects.find(x => x.id === pid);
+  if (!p) return;
+  rpEnsureBlocks(p);
+  rpCurrentId = pid;
+  rpActiveTab = 'memo';
+  rpUndoStack = [];
+  rpRedoStack = [];
+  document.getElementById('rp-dim').classList.add('show');
+  document.getElementById('rp-panel').classList.add('show');
+  document.getElementById('rp-panel').style.width = (rpPanelWidth && window.innerWidth > 640) ? (rpPanelWidth + 'px') : '';
+  rpRenderPanel();
+}
+function rpClosePanel() {
+  if (rpCurrentId === null) return;
+  rpSaveAll();
+  document.getElementById('rp-dim').classList.remove('show');
+  document.getElementById('rp-panel').classList.remove('show');
+  rpCloseSlashMenu();
+  rpCloseFormatMenu();
+  rpCurrentId = null;
+}
+function rpSwitchTab(t) {
+  clearTimeout(rpSaveTimer);
+  rpSaveAll();
+  rpCloseSlashMenu();
+  rpCloseFormatMenu();
+  rpActiveTab = t;
+  rpRenderPanel();
+}
+function rpUpdateName(e) {
+  const p = rpGetProject();
+  if (!p) return;
+  const raw = e.target.value.trim();
+  if (!raw) { e.target.value = p.clientName; return; }
+  const name = raw.startsWith('■') ? raw : `■ ${raw}`;
+  p.clientName = name;
+  e.target.value = name;
+  scheduleSave();
+  renderProjects();
+}
+function rpToggleStatus() {
+  if (rpCurrentId === null) return;
+  rpSaveAll();
+  toggleProjectClosed(rpCurrentId);
+  rpRenderPanel();
+}
+
+function rpInitResizeHandle() {
+  const handle = document.getElementById('rp-resize-handle');
+  if (!handle) return;
+  handle.addEventListener('mousedown', e => {
+    rpIsResizingPanel = true;
+    rpResizeStartX = e.clientX;
+    rpResizeStartWidth = document.getElementById('rp-panel').getBoundingClientRect().width;
+    document.body.style.cursor = 'ew-resize';
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  });
+}
+document.addEventListener('mousemove', e => {
+  if (!rpIsResizingPanel) return;
+  const delta = rpResizeStartX - e.clientX;
+  let newWidth = rpResizeStartWidth + delta;
+  newWidth = Math.max(340, Math.min(newWidth, window.innerWidth * 0.95));
+  document.getElementById('rp-panel').style.width = newWidth + 'px';
+});
+document.addEventListener('mouseup', () => {
+  if (!rpIsResizingPanel) return;
+  rpIsResizingPanel = false;
+  document.body.style.cursor = '';
+  document.body.style.userSelect = '';
+  rpPanelWidth = document.getElementById('rp-panel').getBoundingClientRect().width;
+  try { localStorage.setItem('rp_panel_width', String(Math.round(rpPanelWidth))); } catch (e) {}
+});
+
+function rpRenderPanel() {
+  const p = rpGetProject();
+  if (!p) return;
+  const statusClosed = !!p.closedAt;
+  const panelEl = document.getElementById('rp-panel');
+  panelEl.innerHTML = `
+    <div class="rp-resize-handle" id="rp-resize-handle"></div>
+    <div class="rp-phead">
+      <div class="rp-phead-name"><input type="text" class="rp-name-input" id="rp-name-input"></div>
+      <div class="rp-phead-status">
+        <span class="rp-status-badge${statusClosed ? ' closed' : ''}">${statusClosed ? '종료' : '진행중'}</span>
+        <button type="button" class="rp-status-btn" id="rp-status-btn">${statusClosed ? '재개' : '종료'}</button>
+        <button type="button" class="rp-close-btn" id="rp-close-btn">✕</button>
+      </div>
+    </div>
+    <div class="rp-pbody">
+      <div class="rp-tabbar">
+        ${RP_TABS.map(t => `<button type="button" data-tab="${t.id}" class="${rpActiveTab === t.id ? 'active' : ''}">${t.label}</button>`).join('')}
+      </div>
+      <div class="rp-hint">'/' 또는 '# ' '- ' '[] ' 로 서식 전환 · 드래그 선택 후 우클릭/Ctrl+B·I·H: 서식 · 좌측 ⋮⋮ 핸들로 순서 변경 · Ctrl+V: 스크린샷 붙여넣기 · Ctrl+Z/Ctrl+Shift+Y: 실행취소/다시실행</div>
+      <div id="rp-block-container"></div>
+    </div>
+  `;
+  const nameInput = panelEl.querySelector('#rp-name-input');
+  nameInput.value = p.clientName;
+  nameInput.addEventListener('change', rpUpdateName);
+  panelEl.querySelector('#rp-close-btn').addEventListener('click', rpClosePanel);
+  panelEl.querySelector('#rp-status-btn').addEventListener('click', rpToggleStatus);
+  panelEl.querySelectorAll('.rp-tabbar button').forEach(btn => {
+    btn.addEventListener('click', () => rpSwitchTab(btn.dataset.tab));
+  });
+  rpInitResizeHandle();
+  rpRenderBlocks(rpActiveTab);
+}
+
+function rpRenderBlocks(tabId) {
+  const p = rpGetProject();
+  if (!p) return;
+  rpEnsureBlocks(p);
+  const container = document.getElementById('rp-block-container');
+  if (!container) return;
+  container.innerHTML = '';
+  p.blocks[tabId].forEach(b => container.appendChild(rpCreateBlockEl(b)));
+}
+
+function rpCreateBlockEl(block) {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'rp-block';
+  wrapper.dataset.type = block.type;
+  const handle = `<span class="rp-drag-handle" draggable="true">⋮⋮</span>`;
+  if (block.type === 'ocrloading') {
+    wrapper.innerHTML = `${handle}<div class="rp-ocr-block rp-ocr-loading">🔎 이미지 텍스트 인식 중...</div>`;
+    return wrapper;
+  }
+  const indent = block.indent || 0;
+  wrapper.dataset.indent = indent;
+  wrapper.style.marginLeft = (indent * 20) + 'px';
+  let inner = handle;
+  if (block.type === 'bullet') inner += `<span class="rp-bdot">•</span>`;
+  if (block.type === 'checkbox') inner += `<input type="checkbox" class="rp-cbox" ${block.checked ? 'checked' : ''}>`;
+  if (block.type === 'ocr') {
+    inner += `<div class="rp-ocr-block"><div class="rp-ocr-label">🔎 스크린샷에서 인식된 텍스트</div><div class="rp-block-text" contenteditable="true" data-placeholder="인식 실패 - 직접 입력하세요">${block.text || ''}</div></div>`;
+  } else {
+    inner += `<div class="rp-block-text" contenteditable="true" data-placeholder="입력하거나 '/'로 명령어 사용">${block.text || ''}</div>`;
+  }
+  wrapper.innerHTML = inner;
+  return wrapper;
+}
+function rpSerializeBlocks(container) {
+  return Array.from(container.querySelectorAll(':scope > .rp-block')).map(el => {
+    const type = el.dataset.type;
+    if (type === 'ocrloading') return null;
+    const textEl = el.querySelector('.rp-block-text');
+    const obj = { type, text: textEl.innerHTML, indent: Number(el.dataset.indent || 0) };
+    if (type === 'checkbox') obj.checked = el.querySelector('.rp-cbox').checked;
+    return obj;
+  }).filter(Boolean);
+}
+function rpCommitBlocks() {
+  if (rpCurrentId === null) return;
+  const container = document.getElementById('rp-block-container');
+  if (!container) return;
+  const p = rpGetProject();
+  if (!p) return;
+  p.blocks[rpActiveTab] = rpSerializeBlocks(container);
+}
+function rpPushUndo() {
+  const p = rpGetProject();
+  if (!p) return;
+  rpUndoStack.push(JSON.stringify(p.blocks));
+  if (rpUndoStack.length > 50) rpUndoStack.shift();
+  rpRedoStack = [];
+}
+function rpSaveAll() {
+  if (rpCurrentId === null) return;
+  rpPushUndo();
+  rpCommitBlocks();
+  scheduleSave();
+}
+function rpScheduleSaveLocal() {
+  clearTimeout(rpSaveTimer);
+  rpSaveTimer = setTimeout(rpSaveAll, 500);
+}
+function rpUndo() {
+  clearTimeout(rpSaveTimer);
+  const p = rpGetProject();
+  if (!p || !rpUndoStack.length) return;
+  rpRedoStack.push(JSON.stringify(p.blocks));
+  p.blocks = JSON.parse(rpUndoStack.pop());
+  scheduleSave();
+  rpCloseSlashMenu();
+  rpCloseFormatMenu();
+  rpRenderBlocks(rpActiveTab);
+}
+function rpRedo() {
+  clearTimeout(rpSaveTimer);
+  const p = rpGetProject();
+  if (!p || !rpRedoStack.length) return;
+  rpUndoStack.push(JSON.stringify(p.blocks));
+  p.blocks = JSON.parse(rpRedoStack.pop());
+  scheduleSave();
+  rpCloseSlashMenu();
+  rpCloseFormatMenu();
+  rpRenderBlocks(rpActiveTab);
+}
+
+function rpRunOcr(dataUrl, loadingBlock) {
+  const pid = rpCurrentId;
+  const tab = rpActiveTab;
+  const finish = text => {
+    if (document.contains(loadingBlock) && rpCurrentId === pid && rpActiveTab === tab) {
+      const ocrBlock = rpCreateBlockEl({ type: 'ocr', text: text || '', indent: 0 });
+      loadingBlock.replaceWith(ocrBlock);
+      rpSaveAll();
+      return;
+    }
+    // 탭 전환/패널 닫힘/undo 등으로 loadingBlock이 고아 DOM이 된 경우:
+    // 화면을 건드리지 말고 데이터에 직접 반영해 저장 유실을 막는다.
+    const p = state.projects.find(x => x.id === pid);
+    if (!p || !p.blocks || !p.blocks[tab]) return;
+    p.blocks[tab].push({ type: 'ocr', text: text || '', indent: 0 });
+    scheduleSave();
+    if (rpCurrentId === pid && rpActiveTab === tab) rpRenderBlocks(tab);
+  };
+  if (typeof Tesseract === 'undefined') { finish(''); return; }
+  Tesseract.recognize(dataUrl, 'kor+eng')
+    .then(({ data }) => finish((data.text || '').trim()))
+    .catch(() => finish(''));
+}
+document.getElementById('rp-dim').addEventListener('click', rpClosePanel);
+
+function rpFocusEnd(el) {
+  el.focus();
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  range.collapse(false);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+function rpIsEmptyBlock(el) { return el.textContent.trim() === ''; }
+function rpIsCaretAtStart(el) {
+  const sel = window.getSelection();
+  if (!sel.rangeCount) return false;
+  const range = sel.getRangeAt(0);
+  if (!range.collapsed) return false;
+  const pre = range.cloneRange();
+  pre.selectNodeContents(el);
+  pre.setEnd(range.startContainer, range.startOffset);
+  return pre.toString().length === 0;
+}
+function rpHandleEnter(target) {
+  const wrapper = target.closest('.rp-block');
+  const type = wrapper.dataset.type;
+  const indent = Number(wrapper.dataset.indent || 0);
+  const container = wrapper.parentElement;
+  if ((type === 'bullet' || type === 'checkbox') && rpIsEmptyBlock(target)) {
+    const pEl = rpCreateBlockEl({ type: 'p', text: '', indent: 0 });
+    container.replaceChild(pEl, wrapper);
+    rpFocusEnd(pEl.querySelector('.rp-block-text'));
+    rpSaveAll();
+    return;
+  }
+  const newType = (type === 'bullet' || type === 'checkbox') ? type : 'p';
+  const newIndent = (type === 'bullet' || type === 'checkbox') ? indent : 0;
+  const newBlock = rpCreateBlockEl({ type: newType, text: '', indent: newIndent });
+  wrapper.after(newBlock);
+  rpFocusEnd(newBlock.querySelector('.rp-block-text'));
+  rpSaveAll();
+}
+function rpHandleBackspace(target, e) {
+  if (!rpIsEmptyBlock(target) || !rpIsCaretAtStart(target)) return;
+  const wrapper = target.closest('.rp-block');
+  const type = wrapper.dataset.type;
+  const container = wrapper.parentElement;
+  if (type === 'bullet' || type === 'checkbox') {
+    e.preventDefault();
+    const pEl = rpCreateBlockEl({ type: 'p', text: '', indent: 0 });
+    container.replaceChild(pEl, wrapper);
+    rpFocusEnd(pEl.querySelector('.rp-block-text'));
+    rpSaveAll();
+    return;
+  }
+  if (container.children.length <= 1) return;
+  e.preventDefault();
+  const prev = wrapper.previousElementSibling;
+  wrapper.remove();
+  if (prev) {
+    const prevText = prev.querySelector('.rp-block-text');
+    if (prevText) rpFocusEnd(prevText);
+  }
+  rpSaveAll();
+}
+function rpHandleTabIndent(target, e) {
+  const wrapper = target.closest('.rp-block');
+  const type = wrapper.dataset.type;
+  if (type !== 'bullet' && type !== 'checkbox') return;
+  e.preventDefault();
+  const prev = wrapper.previousElementSibling;
+  const curIndent = Number(wrapper.dataset.indent || 0);
+  let newIndent = curIndent;
+  if (!e.shiftKey) {
+    const maxIndent = prev ? Number(prev.dataset.indent || 0) + 1 : 0;
+    newIndent = Math.min(curIndent + 1, maxIndent);
+  } else {
+    newIndent = Math.max(curIndent - 1, 0);
+  }
+  if (newIndent !== curIndent) {
+    wrapper.dataset.indent = newIndent;
+    wrapper.style.marginLeft = (newIndent * 20) + 'px';
+    rpSaveAll();
+  }
+}
+function rpEscapeHtml(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function rpTryMarkdownShortcut(target) {
+  const text = target.textContent;
+  for (const rule of RP_MARKDOWN_RULES) {
+    const m = text.match(rule.re);
+    if (!m) continue;
+    const wrapper = target.closest('.rp-block');
+    if (wrapper.dataset.type === rule.type) return false;
+    const container = wrapper.parentElement;
+    const indent = (rule.type === 'bullet' || rule.type === 'checkbox') ? Number(wrapper.dataset.indent || 0) : 0;
+    const newEl = rpCreateBlockEl({ type: rule.type, text: rpEscapeHtml(m[1]), indent });
+    container.replaceChild(newEl, wrapper);
+    rpFocusEnd(newEl.querySelector('.rp-block-text'));
+    rpSaveAll();
+    return true;
+  }
+  return false;
+}
+
+function rpOpenSlashMenu(target) {
+  rpSlashMenuTarget = target;
+  rpSlashFiltered = RP_SLASH_ITEMS;
+  rpSlashSelIdx = 0;
+  rpRenderSlashMenu();
+}
+function rpFilterSlashMenu(query) {
+  rpSlashFiltered = RP_SLASH_ITEMS.filter(it => it.label.includes(query) || it.type.includes(query));
+  rpSlashSelIdx = 0;
+  rpRenderSlashMenu();
+}
+function rpRenderSlashMenu() {
+  if (!rpSlashMenuEl) {
+    rpSlashMenuEl = document.createElement('div');
+    rpSlashMenuEl.id = 'rp-slash-menu';
+    document.body.appendChild(rpSlashMenuEl);
+  }
+  const rect = rpSlashMenuTarget.getBoundingClientRect();
+  rpSlashMenuEl.style.left = Math.min(rect.left, window.innerWidth - 200) + 'px';
+  rpSlashMenuEl.style.top = (rect.bottom + 4) + 'px';
+  rpSlashMenuEl.innerHTML = rpSlashFiltered.map((it, i) =>
+    `<div class="rp-slash-item ${i === rpSlashSelIdx ? 'sel' : ''}" data-idx="${i}"><span class="rp-si-icon">${it.icon}</span>${it.label}</div>`
+  ).join('') || '<div class="rp-slash-item" style="color:#bbb;cursor:default">일치 항목 없음</div>';
+  rpSlashMenuEl.style.display = 'block';
+}
+function rpCloseSlashMenu() { if (rpSlashMenuEl) rpSlashMenuEl.style.display = 'none'; rpSlashMenuTarget = null; }
+function rpMoveSlashSelection(delta) {
+  if (!rpSlashFiltered.length) return;
+  rpSlashSelIdx = (rpSlashSelIdx + delta + rpSlashFiltered.length) % rpSlashFiltered.length;
+  rpRenderSlashMenu();
+}
+function rpConfirmSlashSelection() {
+  if (!rpSlashFiltered.length || !rpSlashMenuTarget) { rpCloseSlashMenu(); return; }
+  const item = rpSlashFiltered[rpSlashSelIdx];
+  const wrapper = rpSlashMenuTarget.closest('.rp-block');
+  const container = wrapper.parentElement;
+  const newEl = rpCreateBlockEl({ type: item.type, text: '', indent: 0 });
+  container.replaceChild(newEl, wrapper);
+  rpCloseSlashMenu();
+  rpFocusEnd(newEl.querySelector('.rp-block-text'));
+  rpSaveAll();
+}
+
+function rpOpenFormatMenuAt(x, y) {
+  if (!rpFormatMenuEl) {
+    rpFormatMenuEl = document.createElement('div');
+    rpFormatMenuEl.id = 'rp-format-menu';
+    document.body.appendChild(rpFormatMenuEl);
+  }
+  rpFormatMenuEl.innerHTML = `
+    <div class="rp-fm-item" onclick="rpApplyFormat('bold')"><b>B</b> 굵게 (Ctrl+B)</div>
+    <div class="rp-fm-item" onclick="rpApplyFormat('italic')"><i>I</i> 기울임 (Ctrl+I)</div>
+    <div class="rp-fm-label">글자색 (Ctrl+H)</div>
+    <div class="rp-fm-color-row">${RP_COLORS.map(c => `<span class="rp-swatch" style="background:${c}" onclick="rpApplyColor('${c}')"></span>`).join('')}</div>
+    <div class="rp-fm-label">배경 하이라이트</div>
+    <div class="rp-fm-color-row">${RP_HILITE_COLORS.map(c => `<span class="rp-swatch" style="background:${c}" onclick="rpApplyHighlight('${c}')"></span>`).join('')}</div>
+    <div class="rp-fm-item" onclick="rpApplyFormat('removeFormat')">서식 지우기</div>
+  `;
+  rpFormatMenuEl.style.left = Math.min(x, window.innerWidth - 210) + 'px';
+  rpFormatMenuEl.style.top = Math.min(y, window.innerHeight - 220) + 'px';
+  rpFormatMenuEl.style.display = 'block';
+}
+function rpCloseFormatMenu() { if (rpFormatMenuEl) rpFormatMenuEl.style.display = 'none'; }
+function rpRestoreSelection() {
+  if (!rpSavedRange) return;
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(rpSavedRange);
+}
+function rpApplyFormat(cmd) { rpRestoreSelection(); document.execCommand(cmd); rpCloseFormatMenu(); rpScheduleSaveLocal(); }
+function rpApplyColor(c) { rpRestoreSelection(); document.execCommand('foreColor', false, c); rpCloseFormatMenu(); rpScheduleSaveLocal(); }
+function rpApplyHighlight(c) {
+  rpRestoreSelection();
+  if (!document.execCommand('hiliteColor', false, c)) document.execCommand('backColor', false, c);
+  rpCloseFormatMenu();
+  rpScheduleSaveLocal();
+}
+function rpOpenColorPickerAtSelection() {
+  const sel = window.getSelection();
+  if (!sel.rangeCount || sel.isCollapsed) return;
+  rpSavedRange = sel.getRangeAt(0).cloneRange();
+  const rect = rpSavedRange.getBoundingClientRect();
+  rpOpenFormatMenuAt(rect.left, rect.bottom + 6);
+}
+
+document.addEventListener('dragstart', e => {
+  if (!e.target.classList || !e.target.classList.contains('rp-drag-handle')) return;
+  rpDraggedWrapper = e.target.closest('.rp-block');
+  e.dataTransfer.effectAllowed = 'move';
+  try { e.dataTransfer.setData('text/plain', ''); } catch (err) {}
+  rpDraggedWrapper.classList.add('dragging');
+});
+document.addEventListener('dragover', e => {
+  if (!rpDraggedWrapper) return;
+  const container = rpDraggedWrapper.parentElement;
+  if (!container || !container.contains(e.target)) return;
+  e.preventDefault();
+  const targetBlock = e.target.closest('.rp-block');
+  if (!targetBlock || targetBlock === rpDraggedWrapper || targetBlock.parentElement !== container) return;
+  const rect = targetBlock.getBoundingClientRect();
+  const before = (e.clientY - rect.top) < rect.height / 2;
+  const refNode = before ? targetBlock : targetBlock.nextSibling;
+  if (rpDraggedWrapper.nextSibling !== refNode) container.insertBefore(rpDraggedWrapper, refNode);
+});
+document.addEventListener('drop', e => { if (rpDraggedWrapper) e.preventDefault(); });
+document.addEventListener('dragend', () => {
+  if (rpDraggedWrapper) {
+    rpDraggedWrapper.classList.remove('dragging');
+    rpDraggedWrapper = null;
+    rpSaveAll();
+  }
+});
+
+document.addEventListener('input', e => {
+  const target = e.target;
+  if (!target.classList || !target.classList.contains('rp-block-text')) return;
+  if (rpTryMarkdownShortcut(target)) return;
+  if (target.textContent === '/') {
+    rpOpenSlashMenu(target);
+  } else if (rpSlashMenuTarget === target) {
+    const val = target.textContent;
+    if (val.startsWith('/')) rpFilterSlashMenu(val.slice(1));
+    else rpCloseSlashMenu();
+  }
+  rpScheduleSaveLocal();
+});
+document.addEventListener('change', e => {
+  if (e.target.classList && e.target.classList.contains('rp-cbox')) rpSaveAll();
+});
+document.addEventListener('contextmenu', e => {
+  const sel = window.getSelection();
+  const active = document.activeElement;
+  if (sel && !sel.isCollapsed && active && active.classList && active.classList.contains('rp-block-text')) {
+    e.preventDefault();
+    rpSavedRange = sel.getRangeAt(0).cloneRange();
+    rpOpenFormatMenuAt(e.clientX, e.clientY);
+  }
+});
+document.addEventListener('paste', e => {
+  const target = document.activeElement;
+  if (!target || !target.classList || !target.classList.contains('rp-block-text')) return;
+  const cd = e.clipboardData || window.clipboardData;
+  const items = cd.items || [];
+  for (const item of items) {
+    if (item.type.indexOf('image') === 0) {
+      e.preventDefault();
+      const file = item.getAsFile();
+      const reader = new FileReader();
+      reader.onload = ev => {
+        const wrapper = target.closest('.rp-block');
+        if (!wrapper || !wrapper.parentElement) return;
+        const loadingBlock = rpCreateBlockEl({ type: 'ocrloading' });
+        wrapper.after(loadingBlock);
+        const newP = rpCreateBlockEl({ type: 'p', text: '', indent: 0 });
+        loadingBlock.after(newP);
+        rpFocusEnd(newP.querySelector('.rp-block-text'));
+        rpSaveAll();
+        rpRunOcr(ev.target.result, loadingBlock);
+      };
+      reader.readAsDataURL(file);
+      return;
+    }
+  }
+  e.preventDefault();
+  const text = cd.getData('text/plain');
+  document.execCommand('insertText', false, text);
+  rpScheduleSaveLocal();
+});
+document.addEventListener('click', e => {
+  if (rpSlashMenuEl && rpSlashMenuEl.style.display === 'block') {
+    const item = e.target.closest('.rp-slash-item');
+    if (item && item.dataset.idx !== undefined) { rpSlashSelIdx = Number(item.dataset.idx); rpConfirmSlashSelection(); }
+    else if (!rpSlashMenuEl.contains(e.target)) rpCloseSlashMenu();
+  }
+  if (rpFormatMenuEl && rpFormatMenuEl.style.display === 'block' && !rpFormatMenuEl.contains(e.target)) {
+    rpCloseFormatMenu();
+  }
+});
+document.addEventListener('keydown', e => {
+  if (rpCurrentId === null) return;
+  const ctrl = e.ctrlKey || e.metaKey;
+  if (ctrl && !e.shiftKey && (e.key === 'z' || e.key === 'Z')) { e.preventDefault(); rpUndo(); return; }
+  if (ctrl && e.shiftKey && (e.key === 'y' || e.key === 'Y')) { e.preventDefault(); rpRedo(); return; }
+  const target = e.target;
+  const isBT = target.classList && target.classList.contains('rp-block-text');
+  if (ctrl && !e.shiftKey && /^[bBiIhH]$/.test(e.key) && isBT) {
+    e.preventDefault();
+    const k = e.key.toLowerCase();
+    if (k === 'b') document.execCommand('bold');
+    else if (k === 'i') document.execCommand('italic');
+    else if (k === 'h') { rpOpenColorPickerAtSelection(); return; }
+    rpScheduleSaveLocal();
+    return;
+  }
+  if (isBT && rpSlashMenuEl && rpSlashMenuEl.style.display === 'block') {
+    if (e.key === 'ArrowDown') { e.preventDefault(); rpMoveSlashSelection(1); return; }
+    if (e.key === 'ArrowUp') { e.preventDefault(); rpMoveSlashSelection(-1); return; }
+    if (e.key === 'Enter') { e.preventDefault(); rpConfirmSlashSelection(); return; }
+    if (e.key === 'Escape') { e.preventDefault(); rpCloseSlashMenu(); return; }
+  }
+  if (isBT) {
+    if (e.key === 'Tab') { rpHandleTabIndent(target, e); return; }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); rpHandleEnter(target); return; }
+    if (e.key === 'Backspace') { rpHandleBackspace(target, e); return; }
+  }
+  if (e.key === 'Escape') {
+    const ae = document.activeElement;
+    if (ae && ae.tagName === 'INPUT' && ae.closest('#rp-panel')) ae.blur();
+    rpClosePanel();
+  }
+});
+window.addEventListener('pagehide', () => { if (rpCurrentId !== null) rpCommitBlocks(); });
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden' && rpCurrentId !== null) rpCommitBlocks();
+});
 
 // 패널 2 todo 우클릭
 function attachTodoCtx(el, t) {
