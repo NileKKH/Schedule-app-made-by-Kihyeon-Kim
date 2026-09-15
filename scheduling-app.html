@@ -1453,7 +1453,7 @@
       <span>메모 (선택)</span>
       <button type="button" id="btn-expand-memo" style="background:none;border:none;color:var(--primary);font-size:0.75rem;cursor:pointer;text-decoration:underline;padding:0;">자세히 보기 ⤢</button>
     </label>
-    <textarea id="input-todo-detail-memo" rows="4" style="width:100%;font-family:inherit;font-size:0.85rem;border:1px solid var(--border);border-radius:var(--radius);padding:8px;resize:vertical;"></textarea>
+    <div id="input-todo-detail-memo" class="memo-richtext" contenteditable="true" style="width:100%;min-height:80px;max-height:220px;overflow-y:auto;font-family:inherit;font-size:0.85rem;border:1px solid var(--border);border-radius:var(--radius);padding:8px;"></div>
     <div class="modal-btns">
       <button class="btn-secondary" onclick="closeModal('modal-todo-detail')">취소</button>
       <button class="btn-primary" id="btn-save-todo-detail">저장</button>
@@ -1465,7 +1465,7 @@
 <div class="modal-overlay" id="modal-memo-expand">
   <div class="modal" style="width:min(640px,94vw);padding:20px 24px;">
     <h2 style="font-size:1rem;margin-bottom:12px;">메모</h2>
-    <textarea id="input-memo-expand" rows="16" style="width:100%;font-family:inherit;font-size:0.9rem;border:1px solid var(--border);border-radius:var(--radius);padding:12px;resize:vertical;"></textarea>
+    <div id="input-memo-expand" class="memo-richtext" contenteditable="true" style="width:100%;min-height:320px;max-height:60vh;overflow-y:auto;font-family:inherit;font-size:0.9rem;border:1px solid var(--border);border-radius:var(--radius);padding:12px;"></div>
     <div class="modal-btns">
       <button class="btn-secondary" id="btn-memo-expand-cancel">취소</button>
       <button class="btn-primary" id="btn-memo-expand-save">적용</button>
@@ -1572,6 +1572,35 @@ function getProjectColor(projectId) {
 function uuid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2);
 }
+// ============================================================
+// 메모 리치텍스트 (기존 plain text 데이터 보존용 유틸)
+// ============================================================
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+// todo._memoRich === true면 memo가 이미 HTML(서식 포함). 아니면 기존 plain text이므로
+// 이스케이프 + 줄바꿈 변환만 해서 안전하게 보여준다(원본 데이터는 건드리지 않음).
+function memoToDisplayHtml(todo) {
+  if (!todo.memo) return '';
+  if (todo._memoRich) return todo.memo;
+  return escapeHtml(todo.memo).replace(/\n/g, '<br>');
+}
+function memoHtmlToPlainText(html) {
+  if (!html) return '';
+  const div = document.createElement('div');
+  div.innerHTML = html;
+  return div.textContent || '';
+}
+function attachMemoRichShortcuts(el) {
+  el.addEventListener('keydown', e => {
+    if (!(e.ctrlKey || e.metaKey)) return;
+    if (e.key === 'b' || e.key === 'B') { e.preventDefault(); document.execCommand('bold'); }
+    else if (e.key === '5') { e.preventDefault(); document.execCommand('strikeThrough'); }
+    else if (e.key === 'i' || e.key === 'I') { e.preventDefault(); document.execCommand('italic'); }
+  });
+}
 function toDateStr(d) {
   return d.toFullYear ? null : d.toISOString().slice(0,10);
 }
@@ -1658,6 +1687,8 @@ function normalizePayload(payload = {}) {
 
 function applySchedulePayload(payload) {
   const normalized = normalizePayload(payload);
+  normalized.projects.forEach((p, i) => { if (typeof p.order !== 'number') p.order = i; });
+  normalized.projects.sort((a, b) => (a.order || 0) - (b.order || 0));
   DATA_KEYS.forEach(key => { state[key] = normalized[key]; });
 }
 
@@ -1740,7 +1771,10 @@ function mergeSchedulePayload(basePayload, remotePayload, localPayload) {
   const base = normalizePayload(basePayload);
   const remote = normalizePayload(remotePayload);
   const local = normalizePayload(localPayload);
-  return Object.fromEntries(DATA_KEYS.map(key => [key, mergeCollection(base[key], remote[key], local[key])]));
+  const merged = Object.fromEntries(DATA_KEYS.map(key => [key, mergeCollection(base[key], remote[key], local[key])]));
+  // 프로젝트 순서는 배열 위치가 아니라 order 필드가 진실이므로, 병합 후 그 필드로 재정렬한다.
+  merged.projects.sort((a, b) => (a.order || 0) - (b.order || 0));
+  return merged;
 }
 
 async function fetchGistPayload() {
@@ -1995,7 +2029,8 @@ function renderProjects() {
     const raw = inp.value.trim();
     if (!raw) { inp.focus(); return; }
     const name = raw.startsWith('■') ? raw : `■ ${raw}`;
-    state.projects.push({ id: uuid(), clientName: name });
+    const maxOrder = state.projects.reduce((m, p) => Math.max(m, p.order || 0), -1);
+    state.projects.push({ id: uuid(), clientName: name, order: maxOrder + 1 });
     inp.value = '';
     scheduleSave(); render();
   };
@@ -3372,7 +3407,7 @@ function renderMobileDayView() {
     if (!todo._recurring) item.type = 'button';
     const meta = [
       todo._recurring ? '반복 일정' : '',
-      !todo._recurring && todo.memo ? todo.memo : '',
+      !todo._recurring && todo.memo ? (todo._memoRich ? memoHtmlToPlainText(todo.memo) : todo.memo) : '',
     ].filter(Boolean).join('\n');
     const titlePrefix = !todo._recurring && todo.time ? `[${todo.time}] ` : '';
     item.innerHTML = `
@@ -3381,7 +3416,8 @@ function renderMobileDayView() {
       ${meta ? `<span class="mobile-day-todo-meta">${meta}</span>` : ''}
     `;
     if (!todo._recurring) {
-      item.addEventListener('click', () => {
+      item.addEventListener('click', e => {
+        e.stopPropagation();
         const rect = item.getBoundingClientRect();
         showMobileTodoMenu(todo, rect.left + rect.width / 2, rect.top + 12);
       });
@@ -4562,7 +4598,7 @@ function assignTodoToDateRange(todoId, start, end) {
     const originId = todo.parentId || todo.id;
     state.todos.push({ id: uuid(), projectId: todo.projectId, title: todo.title,
       parentId: originId, startDate: start, endDate: end, done: false, order: todo.order,
-      priority: todo.priority, calOrder: getNextCalendarTodoOrder(todo), invi: !!todo.invi, time: todo.time || null, memo: todo.memo || null, completedAt: null });
+      priority: todo.priority, calOrder: getNextCalendarTodoOrder(todo), invi: !!todo.invi, time: todo.time || null, memo: todo.memo || null, _memoRich: !!todo._memoRich, completedAt: null });
   } else {
     todo.startDate = start;
     todo.endDate = end;
@@ -4719,7 +4755,7 @@ function openTodoDetailModal(todoId) {
   document.getElementById('select-todo-detail-priority').value = origin.priority || 'none';
   document.getElementById('input-todo-detail-time').value = origin.time || '';
   document.getElementById('input-todo-detail-invi').checked = !!origin.invi;
-  document.getElementById('input-todo-detail-memo').value = origin.memo || '';
+  document.getElementById('input-todo-detail-memo').innerHTML = memoToDisplayHtml(origin);
 
   document.getElementById('btn-todo-detail-add-schedule').onclick = () => {
     closeModal('modal-todo-detail');
@@ -4732,7 +4768,9 @@ function openTodoDetailModal(todoId) {
     const newProjectId= projSel.value;
     const time = document.getElementById('input-todo-detail-time').value || null;
     const invi = document.getElementById('input-todo-detail-invi').checked;
-    const memo = document.getElementById('input-todo-detail-memo').value.trim() || null;
+    const memoEl = document.getElementById('input-todo-detail-memo');
+    const memoText = memoEl.textContent.trim();
+    const memo = memoText ? memoEl.innerHTML : null;
     state.todos.forEach(x => {
       if (x.id === originId || x.parentId === originId) {
         x.title     = newTitle;
@@ -4741,6 +4779,7 @@ function openTodoDetailModal(todoId) {
         x.time = time;
         x.invi = invi;
         x.memo = memo;
+        x._memoRich = !!memo;
       }
     });
     closeModal('modal-todo-detail');
@@ -4748,16 +4787,19 @@ function openTodoDetailModal(todoId) {
   };
 
   document.getElementById('btn-expand-memo').onclick = () => {
-    const memoTextarea = document.getElementById('input-todo-detail-memo');
-    document.getElementById('input-memo-expand').value = memoTextarea.value;
+    const memoEl = document.getElementById('input-todo-detail-memo');
+    document.getElementById('input-memo-expand').innerHTML = memoEl.innerHTML;
     openModal('modal-memo-expand');
   };
 
   openModal('modal-todo-detail');
 }
 
+attachMemoRichShortcuts(document.getElementById('input-todo-detail-memo'));
+attachMemoRichShortcuts(document.getElementById('input-memo-expand'));
+
 document.getElementById('btn-memo-expand-save').addEventListener('click', () => {
-  document.getElementById('input-todo-detail-memo').value = document.getElementById('input-memo-expand').value;
+  document.getElementById('input-todo-detail-memo').innerHTML = document.getElementById('input-memo-expand').innerHTML;
   closeModal('modal-memo-expand');
 });
 document.getElementById('btn-memo-expand-cancel').addEventListener('click', () => {
@@ -4805,6 +4847,7 @@ function enableProjectDragSort(el) {
         if (srcIdx >= 0 && tgtIdx >= 0) {
           const [moved] = state.projects.splice(srcIdx, 1);
           state.projects.splice(tgtIdx, 0, moved);
+          state.projects.forEach((p, i) => { p.order = i; });
           scheduleSave(); render();
         }
       }
