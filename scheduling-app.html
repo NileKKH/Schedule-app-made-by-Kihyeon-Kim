@@ -146,6 +146,16 @@
   }
   .project-item:hover .proj-del { opacity: 1; }
 
+  #panel1-hint {
+    flex-shrink: 0;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--primary-text);
+    background: var(--primary-light);
+    border-bottom: 1px solid var(--primary-strong);
+    padding: 6px 12px;
+  }
+
   .add-proj-form {
     display: flex; flex-direction: column; gap: 5px;
     border: 1px solid var(--border);
@@ -1200,6 +1210,7 @@
   <!-- 패널 1: 진행중 프로젝트 -->
   <div class="panel" id="panel1">
     <div class="panel-header">진행중 프로젝트</div>
+    <div id="panel1-hint">💡 PJT 더블클릭 → 메모 패널 열림</div>
     <div class="panel-body" id="panel1-body">
       <div id="project-add-box"></div>
       <div id="project-scroll"></div>
