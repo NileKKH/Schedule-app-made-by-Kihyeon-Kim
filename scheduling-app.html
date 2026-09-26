@@ -1895,10 +1895,25 @@ async function saveToGist() {
   gistSaveInFlight = true;
   setSyncStatus('저장 중...');
   try {
+    if (!lastSyncedPayload) {
+      // 원격을 한 번도 성공적으로 불러온 적이 없는 상태에서는 저장하면 안 된다.
+      // (기준값이 없어 화면에 없는 원격 항목을 전부 삭제된 것으로 오인할 수 있음)
+      // loadFromGist()는 draft 병합까지 이미 처리하므로 그대로 재사용한다.
+      await loadFromGist();
+      render();
+      return;
+    }
     const localPayload = clonePayload(getSchedulePayload());
     const savedRevision = draftRevision;
     const remotePayload = await fetchGistPayload();
     const payload = mergeSchedulePayload(lastSyncedPayload || remotePayload, remotePayload, localPayload);
+    const nonEmptyKeys = DATA_KEYS.filter(key => remotePayload[key].length > 0);
+    const wipedKeys = nonEmptyKeys.filter(key => payload[key].length === 0);
+    if (nonEmptyKeys.length >= 2 && wipedKeys.length === nonEmptyKeys.length) {
+      console.warn(`대량 삭제 감지: ${wipedKeys.join(', ')} 항목이 동시에 전부 사라져 저장을 건너뜁니다.`);
+      setSyncStatus('저장 보류됨 · 원격 데이터 대량 삭제 감지', true);
+      return;
+    }
     const res = await fetch(`https://api.github.com/gists/${gistId}`, {
       method: 'PATCH',
       headers: {
