@@ -343,9 +343,13 @@
     border: none; border-radius: var(--radius); cursor: pointer; font-size: 0.82rem;
   }
 
-  /* ===== 패널 3 — 캘린더 ===== */
-  #panel3 { flex: 1; min-width: 200px; border-right: none; }
-  #panel3 .panel-body { padding: 8px 10px; display: flex; flex-direction: column; overflow: hidden; }
+  /* ===== 패널 3 — Pending ===== */
+  #panel3 { width: 280px; min-width: 140px; flex-shrink: 0; }
+  #panel3 .panel-body { padding: 10px; overflow-y: auto; }
+
+  /* ===== 패널 4 — 캘린더 ===== */
+  #panel4 { flex: 1; min-width: 200px; border-right: none; }
+  #panel4 .panel-body { padding: 8px 10px; display: flex; flex-direction: column; overflow: hidden; }
   #calendar-body { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 
   /* 주간 assign 버튼 바 */
@@ -852,7 +856,6 @@
   }
   .todo-done-filter-btn:not(:last-child) { border-right: 1px solid var(--border); }
   .todo-done-filter-btn.active { background: #9aa0a6; color: #fff; }
-  .todo-done-filter-btn.active[data-filter="unassigned"] { background: var(--unassigned-text); }
   #todo-done-sort {
     font-size: 0.72rem;
     padding: 3px 6px;
@@ -935,6 +938,7 @@
     #main.mobile-tab-1 #panel1 { display: flex; }
     #main.mobile-tab-2 #panel2 { display: flex; }
     #main.mobile-tab-3 #panel3 { display: flex; }
+    #main.mobile-tab-4 #panel4 { display: flex; }
 
     /* 캘린더: 토·일 절반 너비 (5fr 5fr 5fr 5fr 5fr 2.5fr 2.5fr) */
     .cal-header,
@@ -1235,7 +1239,6 @@
         <button class="todo-done-filter-btn active" data-filter="hide" onclick="setTodoDoneFilter('hide')">완료 숨김</button>
         <button class="todo-done-filter-btn" data-filter="all" onclick="setTodoDoneFilter('all')">전체</button>
         <button class="todo-done-filter-btn" data-filter="only" onclick="setTodoDoneFilter('only')">완료만</button>
-        <button class="todo-done-filter-btn" data-filter="unassigned" onclick="setTodoDoneFilter('unassigned')">미반영 Todo</button>
       </div>
       <select id="todo-done-sort" onchange="setTodoDoneSort(this.value)" style="display:none;">
         <option value="project">프로젝트별</option>
@@ -1251,8 +1254,17 @@
   <!-- 패널 2-3 구분 드래그 핸들 -->
   <div class="panel-resizer" id="panel-resizer-23"></div>
 
-  <!-- 패널 3: 월간 캘린더 -->
+  <!-- 패널 3: Pending (일정 미반영 Todo) -->
   <div class="panel" id="panel3">
+    <div class="panel-header">Pending</div>
+    <div class="panel-body" id="pending-scroll"></div>
+  </div>
+
+  <!-- 패널 3-4 구분 드래그 핸들 -->
+  <div class="panel-resizer" id="panel-resizer-34"></div>
+
+  <!-- 패널 4: 월간 캘린더 -->
+  <div class="panel" id="panel4">
     <div id="assign-btn-bar">
       <button id="btn-add-assign">+ Talent link Assign 추가</button>
       <div id="recurring-btn-group">
@@ -1570,7 +1582,10 @@
   <button class="mobile-tab-btn" data-tab="2" onclick="switchMobileTab(2)">
     <span class="tab-icon">✅</span>Todo
   </button>
-  <button class="mobile-tab-btn active" data-tab="3" onclick="switchMobileTab(3)">
+  <button class="mobile-tab-btn" data-tab="3" onclick="switchMobileTab(3)">
+    <span class="tab-icon">⏳</span>Pending
+  </button>
+  <button class="mobile-tab-btn active" data-tab="4" onclick="switchMobileTab(4)">
     <span class="tab-icon">📅</span>캘린더
   </button>
 </div>
@@ -1598,6 +1613,7 @@ let state = {
   resizingAssignId: null,
   mobileWeeks: 3,
   mobileAssigningTodoId: null,
+  mobileAssignReturnTab: null,
   mobileDayViewDate: null,
   showClosedProjects: false,
   calSortDraggingId: null,
@@ -2346,7 +2362,6 @@ function renderTodos() {
 
   const doneFilter = state.todoDoneFilter;
   const passesDoneFilter = (t) => {
-    if (doneFilter === 'unassigned') return needsSchedule(t);
     const done = isTodoDone(t);
     if (doneFilter === 'hide') return !done;
     if (doneFilter === 'only') return done;
@@ -2374,7 +2389,7 @@ function renderTodos() {
   } else if (state.todoView === 'project') {
     filteredProjects.forEach(p => {
       const todos = state.todos
-        .filter(t => t.projectId === p.id && !t.parentId && passesDoneFilter(t))
+        .filter(t => t.projectId === p.id && !t.parentId && !needsSchedule(t) && passesDoneFilter(t))
         .sort((a,b) => (a.order||0) - (b.order||0));
       if (todos.length === 0 && !state.activeProjectFilter) return;
 
@@ -2401,7 +2416,7 @@ function renderTodos() {
       .filter(t => t.startDate && projectIds.has(t.projectId))
       .filter(t => doneFilter === 'all' || (doneFilter === 'only' ? t.done : !t.done))
       .sort((a, b) => a.startDate.localeCompare(b.startDate) || (a.time || '').localeCompare(b.time || ''));
-    const dates = doneFilter === 'unassigned' ? [] : [...new Set(scheduledTodos.map(t => t.startDate))];
+    const dates = [...new Set(scheduledTodos.map(t => t.startDate))];
 
     dates.forEach(date => {
       const group = document.createElement('div');
@@ -2418,25 +2433,6 @@ function renderTodos() {
       });
       el.appendChild(group);
     });
-
-    if (doneFilter !== 'only') {
-      const unscheduled = state.todos
-        .filter(t => !t.parentId && !t.startDate && projectIds.has(t.projectId))
-        .filter(t => doneFilter === 'all' || doneFilter === 'unassigned' || !isTodoDone(t));
-      if (unscheduled.length > 0) {
-        const group = document.createElement('div');
-        group.className = 'todo-group';
-        const label = document.createElement('div');
-        label.className = 'todo-group-label';
-        label.textContent = '날짜 미지정';
-        label.style.background = '#fff3cd';
-        label.style.color = '#856404';
-        label.style.borderLeft = '3px solid #ffc107';
-        group.appendChild(label);
-        unscheduled.forEach(t => group.appendChild(buildTodoItem(t, getProjectColor(t.projectId), true)));
-        el.appendChild(group);
-      }
-    }
   } else {
     // 중요도별 그룹
     const priorityGroups = [
@@ -2449,7 +2445,7 @@ function renderTodos() {
     const projectIds = new Set(filteredProjects.map(p => p.id));
     priorityGroups.forEach(pg => {
       const todos = state.todos
-        .filter(t => !t.parentId && (t.priority || 'none') === pg.key && projectIds.has(t.projectId) && passesDoneFilter(t))
+        .filter(t => !t.parentId && (t.priority || 'none') === pg.key && projectIds.has(t.projectId) && !needsSchedule(t) && passesDoneFilter(t))
         .sort((a,b) => {
           const pa = state.projects.findIndex(p => p.id === a.projectId);
           const pb = state.projects.findIndex(p => p.id === b.projectId);
@@ -2556,6 +2552,40 @@ function renderTodos() {
     msg.textContent = '먼저 프로젝트를 추가해주세요.';
     addBox.appendChild(msg);
   }
+}
+
+function renderPendingTodos() {
+  const el = document.getElementById('pending-scroll');
+  el.innerHTML = '';
+
+  const projectView = state.projects.filter(p => state.showClosedProjects ? !!p.closedAt : !p.closedAt);
+  const filteredProjects = state.activeProjectFilter
+    ? projectView.filter(p => p.id === state.activeProjectFilter)
+    : projectView;
+
+  filteredProjects.forEach(p => {
+    const todos = state.todos
+      .filter(t => t.projectId === p.id && !t.parentId && needsSchedule(t))
+      .sort((a,b) => (a.order||0) - (b.order||0));
+    if (todos.length === 0) return;
+
+    const color = getProjectColor(p.id);
+    const group = document.createElement('div');
+    group.className = 'todo-group';
+    const lbl = document.createElement('div');
+    lbl.className = 'todo-group-label';
+    lbl.textContent = p.clientName;
+    lbl.style.background = color.bg;
+    lbl.style.color = color.text;
+    lbl.style.borderLeft = `3px solid ${color.border}`;
+    group.appendChild(lbl);
+
+    todos.forEach(t => {
+      group.appendChild(buildTodoItem(t, color, false));
+    });
+    enableTodoDragSort(group, p.id);
+    el.appendChild(group);
+  });
 }
 
 function addTodo(projectId, title, priority, invi = false, time = null) {
@@ -3456,7 +3486,7 @@ document.getElementById('btn-confirm-recurring-del').addEventListener('click', (
   scheduleSave(); render();
 });
 
-// 패널3 스크롤 → 1주 이동
+// 패널4 스크롤 → 1주 이동
 // ============================================================
 // 모바일 유틸
 // ============================================================
@@ -3557,12 +3587,14 @@ function showMobileTodoMenu(todo, clientX, clientY) {
 
 function startMobileAssign(todoId) {
   state.mobileAssigningTodoId = todoId;
+  const activeTab = Number(document.querySelector('.mobile-tab-btn.active')?.dataset.tab);
+  state.mobileAssignReturnTab = Number.isFinite(activeTab) ? activeTab : 2;
   const todo = state.todos.find(t => t.id === todoId);
   if (!todo) return;
   const chip = document.getElementById('mobile-assign-chip');
   chip.style.display = 'flex';
   chip.innerHTML = `📌 배정 중: <strong>${todo.title}</strong><button onclick="cancelMobileAssign()" style="background:rgba(255,255,255,0.3);border:none;color:#fff;border-radius:10px;padding:2px 8px;cursor:pointer;margin-left:8px;font-size:0.8rem;">취소</button>`;
-  switchMobileTab(3);
+  switchMobileTab(4);
 }
 
 function clearMobileAssignState() {
@@ -3573,7 +3605,7 @@ function clearMobileAssignState() {
 
 function cancelMobileAssign() {
   clearMobileAssignState();
-  if (isMobile()) switchMobileTab(2);
+  if (isMobile()) switchMobileTab(state.mobileAssignReturnTab || 2);
 }
 
 function confirmMobileAssignDate(ds) {
@@ -3587,22 +3619,22 @@ function confirmMobileAssignDate(ds) {
   const btnCancel  = document.getElementById('btn-mobile-assign-cancel');
   btnConfirm.onclick = () => {
     closeModal('modal-mobile-assign-confirm');
-    assignTodoToDate(todoId, ds); // 배정 후 패널3 유지 (캘린더에서 바로 확인)
+    assignTodoToDate(todoId, ds); // 배정 후 패널4(캘린더) 유지 (바로 확인)
   };
   btnCancel.onclick = () => {
     closeModal('modal-mobile-assign-confirm');
-    cancelMobileAssign(); // 패널2로 복귀, todo는 미배정 상태로 유지
+    cancelMobileAssign(); // 배정 시작했던 탭으로 복귀, todo는 미배정 상태로 유지
   };
   openModal('modal-mobile-assign-confirm');
 }
 
 function applyMobileSetup() {
   if (!isMobile()) return;
-  switchMobileTab(3);
+  switchMobileTab(4);
 }
 
 let wheelThrottle = false;
-document.getElementById('panel3').addEventListener('wheel', (e) => {
+document.getElementById('panel4').addEventListener('wheel', (e) => {
   if (wheelThrottle) return;
   wheelThrottle = true;
   setTimeout(() => { wheelThrottle = false; }, 150);
@@ -3625,6 +3657,7 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
 function render() {
   renderProjects();
   renderTodos();
+  renderPendingTodos();
   renderCalendar();
   updateFeedbackCount();
   updateMemoCount();
@@ -4987,7 +5020,7 @@ function enableTodoDragSort(groupEl, projectId) {
 }
 
 // ============================================================
-// 패널 리사이저 (1-2, 2-3)
+// 패널 리사이저 (1-2, 2-3, 3-4)
 // ============================================================
 function initPanelResizer(resizerId, leftPanelId, rightPanelId, opts) {
   if (isMobile()) return;
@@ -5036,19 +5069,20 @@ function initPanelResizer(resizerId, leftPanelId, rightPanelId, opts) {
 // 터치 스와이프 (캘린더 세로 스와이프 → 주 이동)
 // ============================================================
 (function initTouchSwipe() {
-  const panel3 = document.getElementById('panel3');
+  const panel4 = document.getElementById('panel4');
   let touchStartY = 0;
-  panel3.addEventListener('touchstart', e => {
+  panel4.addEventListener('touchstart', e => {
     touchStartY = e.touches[0].clientY;
   }, { passive: true });
-  panel3.addEventListener('touchend', e => {
+  panel4.addEventListener('touchend', e => {
     const dy = e.changedTouches[0].clientY - touchStartY;
     if (Math.abs(dy) > 50) shiftCalendar(dy < 0 ? 1 : -1);
   }, { passive: true });
 })();
 
 initPanelResizer('panel-resizer-12', 'panel1', 'panel2', { minLeft: 60, maxLeft: 300 });
-initPanelResizer('panel-resizer-23', 'panel2', 'panel3', { minLeft: 80, maxLeft: null, rightFlex: true });
+initPanelResizer('panel-resizer-23', 'panel2', 'panel3', { minLeft: 80, maxLeft: 300 });
+initPanelResizer('panel-resizer-34', 'panel3', 'panel4', { minLeft: 80, maxLeft: 400, rightFlex: true });
 
 // ============================================================
 // 앱 시작
