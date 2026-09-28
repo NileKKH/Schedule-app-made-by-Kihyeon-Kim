@@ -3641,6 +3641,27 @@ document.getElementById('panel4').addEventListener('wheel', (e) => {
   shiftCalendar(e.deltaY > 0 ? 1 : -1);
 }, { passive: true });
 
+document.getElementById('pending-scroll').addEventListener('dragover', (e) => {
+  if (!state.draggingFromCalendar || state.ctrlDragging) return;
+  e.preventDefault();
+});
+document.getElementById('pending-scroll').addEventListener('drop', (e) => {
+  if (!state.draggingFromCalendar || state.ctrlDragging) return;
+  e.preventDefault();
+  const todo = state.todos.find(t => t.id === state.draggingTodoId);
+  if (todo) {
+    if (todo.parentId) {
+      state.todos = state.todos.filter(x => x.id !== todo.id);
+    } else {
+      todo.startDate = null; todo.endDate = null;
+    }
+    scheduleSave(); render();
+  }
+  state.draggingTodoId = null;
+  state.draggingFromCalendar = false;
+  state.ctrlDragging = false;
+});
+
 document.getElementById('btn-add-recurring').addEventListener('click', () => openRecurringModal());
 document.getElementById('btn-del-recurring').addEventListener('click', () => openRecurringDelModal());
 
