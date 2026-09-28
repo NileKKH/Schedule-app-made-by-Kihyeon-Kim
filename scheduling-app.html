@@ -2217,11 +2217,9 @@ function buildTodoItem(t, color, showProjectLabel) {
   const allDone = instCount > 0 && instances.every(x => x.done);
   const pMeta = PRIORITY_META[t.priority || 'none'];
 
-  const needSchedule = !t.startDate && instCount === 0;
-
   const item = document.createElement('div');
-  item.className = 'todo-item' + (allDone ? ' done-item' : '') + (isInviTodo(t) ? ' invi-block' : '') + (needSchedule ? ' need-schedule-item' : '');
-  item.style.borderLeft = allDone ? `1px dotted #bbb` : (needSchedule ? `3px solid var(--unassigned-text)` : `3px solid ${color.border}`);
+  item.className = 'todo-item' + (allDone ? ' done-item' : '') + (isInviTodo(t) ? ' invi-block' : '');
+  item.style.borderLeft = allDone ? `1px dotted #bbb` : `3px solid ${color.border}`;
   item.draggable = true;
   item.dataset.id = t.id;
   const projLabel = showProjectLabel
@@ -2230,7 +2228,6 @@ function buildTodoItem(t, color, showProjectLabel) {
   const latestCompletedAt = allDone ? getLatestCompletedAt(t) : null;
   const completedLabel = latestCompletedAt ? `<span class="todo-completed-at">완료: ${formatCompletedAt(latestCompletedAt)}</span>` : '';
   item.innerHTML = `
-    ${needSchedule ? '<span class="need-schedule">[일정반영필요]</span>' : ''}
     <div class="todo-item-row">
       <input type="checkbox" class="done-checkbox" ${allDone ? 'checked' : ''}>
       <span class="priority-badge ${pMeta.cls}">${pMeta.label}</span>
