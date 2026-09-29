@@ -2348,6 +2348,10 @@ function needsSchedule(t) {
   return !t.startDate && instances.length === 0;
 }
 
+function isPending(t) {
+  return needsSchedule(t) && t.pending !== false;
+}
+
 function renderTodos() {
   const el = document.getElementById('todo-scroll');
   el.innerHTML = '';
@@ -2386,7 +2390,7 @@ function renderTodos() {
   } else if (state.todoView === 'project') {
     filteredProjects.forEach(p => {
       const todos = state.todos
-        .filter(t => t.projectId === p.id && !t.parentId && !needsSchedule(t) && passesDoneFilter(t))
+        .filter(t => t.projectId === p.id && !t.parentId && !isPending(t) && passesDoneFilter(t))
         .sort((a,b) => (a.order||0) - (b.order||0));
       if (todos.length === 0 && !state.activeProjectFilter) return;
 
@@ -2404,7 +2408,7 @@ function renderTodos() {
       todos.forEach(t => {
         group.appendChild(buildTodoItem(t, color, false));
       });
-      enableTodoDragSort(group, p.id);
+      enableTodoDragSort(group, p.id, false);
       el.appendChild(group);
     });
   } else if (state.todoView === 'date') {
@@ -2442,7 +2446,7 @@ function renderTodos() {
     const projectIds = new Set(filteredProjects.map(p => p.id));
     priorityGroups.forEach(pg => {
       const todos = state.todos
-        .filter(t => !t.parentId && (t.priority || 'none') === pg.key && projectIds.has(t.projectId) && !needsSchedule(t) && passesDoneFilter(t))
+        .filter(t => !t.parentId && (t.priority || 'none') === pg.key && projectIds.has(t.projectId) && !isPending(t) && passesDoneFilter(t))
         .sort((a,b) => {
           const pa = state.projects.findIndex(p => p.id === a.projectId);
           const pb = state.projects.findIndex(p => p.id === b.projectId);
@@ -2562,7 +2566,7 @@ function renderPendingTodos() {
 
   filteredProjects.forEach(p => {
     const todos = state.todos
-      .filter(t => t.projectId === p.id && !t.parentId && needsSchedule(t))
+      .filter(t => t.projectId === p.id && !t.parentId && isPending(t))
       .sort((a,b) => (a.order||0) - (b.order||0));
     if (todos.length === 0) return;
 
@@ -2580,7 +2584,7 @@ function renderPendingTodos() {
     todos.forEach(t => {
       group.appendChild(buildTodoItem(t, color, false));
     });
-    enableTodoDragSort(group, p.id);
+    enableTodoDragSort(group, p.id, true);
     el.appendChild(group);
   });
 }
@@ -2589,7 +2593,7 @@ function addTodo(projectId, title, priority, invi = false, time = null) {
   if (!projectId) return null;
   const maxOrder = state.todos.filter(t => t.projectId === projectId).reduce((m,t) => Math.max(m, t.order||0), -1);
   const id = uuid();
-  state.todos.push({ id, projectId, title, priority: priority || 'none', invi: !!invi, time: time || null, startDate: null, endDate: null, done: false, order: maxOrder+1 });
+  state.todos.push({ id, projectId, title, priority: priority || 'none', invi: !!invi, time: time || null, startDate: null, endDate: null, done: false, pending: false, order: maxOrder+1 });
   scheduleSave(); render();
   return id;
 }
@@ -3638,26 +3642,43 @@ document.getElementById('panel4').addEventListener('wheel', (e) => {
   shiftCalendar(e.deltaY > 0 ? 1 : -1);
 }, { passive: true });
 
-document.getElementById('pending-scroll').addEventListener('dragover', (e) => {
-  if (!state.draggingFromCalendar || state.ctrlDragging) return;
-  e.preventDefault();
-});
-document.getElementById('pending-scroll').addEventListener('drop', (e) => {
-  if (!state.draggingFromCalendar || state.ctrlDragging) return;
-  e.preventDefault();
-  const todo = state.todos.find(t => t.id === state.draggingTodoId);
-  if (todo) {
-    if (todo.parentId) {
-      state.todos = state.todos.filter(x => x.id !== todo.id);
-    } else {
-      todo.startDate = null; todo.endDate = null;
+function setupBucketDropTarget(elId, targetPending) {
+  const el = document.getElementById(elId);
+  el.addEventListener('dragover', (e) => {
+    if (!state.draggingTodoId) return;
+    if (state.draggingFromCalendar && state.ctrlDragging) return;
+    e.preventDefault();
+  });
+  el.addEventListener('drop', (e) => {
+    if (!state.draggingTodoId) return;
+    const isPlainSort = !!e.dataTransfer.getData('text/sort');
+    if (isPlainSort && e.target.closest('.todo-item')) return; // 개별 항목 드롭 핸들러가 이미 처리
+    if (state.draggingFromCalendar && state.ctrlDragging) {
+      state.draggingTodoId = null; state.draggingFromCalendar = false; state.ctrlDragging = false;
+      return;
     }
-    scheduleSave(); render();
-  }
-  state.draggingTodoId = null;
-  state.draggingFromCalendar = false;
-  state.ctrlDragging = false;
-});
+    e.preventDefault();
+    const todo = state.todos.find(t => t.id === state.draggingTodoId);
+    if (todo) {
+      if (state.draggingFromCalendar) {
+        if (todo.parentId) {
+          state.todos = state.todos.filter(x => x.id !== todo.id);
+        } else {
+          todo.startDate = null; todo.endDate = null;
+          todo.pending = targetPending;
+        }
+      } else {
+        todo.pending = targetPending;
+      }
+      scheduleSave(); render();
+    }
+    state.draggingTodoId = null;
+    state.draggingFromCalendar = false;
+    state.ctrlDragging = false;
+  });
+}
+setupBucketDropTarget('todo-scroll', false);
+setupBucketDropTarget('pending-scroll', true);
 
 document.getElementById('btn-add-recurring').addEventListener('click', () => openRecurringModal());
 document.getElementById('btn-del-recurring').addEventListener('click', () => openRecurringDelModal());
@@ -5004,7 +5025,7 @@ function enableProjectDragSort(el) {
 // ============================================================
 // 패널 2 todo 드래그 정렬 (같은 프로젝트 그룹 내에서만)
 // ============================================================
-function enableTodoDragSort(groupEl, projectId) {
+function enableTodoDragSort(groupEl, projectId, isPendingGroup) {
   let dragSrcId = null;
   groupEl.querySelectorAll('.todo-item').forEach(item => {
     item.addEventListener('dragstart', e => {
@@ -5024,12 +5045,20 @@ function enableTodoDragSort(groupEl, projectId) {
       item.style.boxShadow = '';
       const src = e.dataTransfer.getData('text/sort');
       if (!src || src === item.dataset.id) { dragSrcId = null; return; }
-      const srcTodo = state.todos.find(t => t.id === src && t.projectId === projectId);
-      const tgtTodo = state.todos.find(t => t.id === item.dataset.id && t.projectId === projectId);
-      if (!srcTodo || !tgtTodo) { dragSrcId = null; return; }
-      const srcOrd = srcTodo.order ?? 0;
-      srcTodo.order = tgtTodo.order ?? 0;
-      tgtTodo.order = srcOrd;
+      const srcTodo = state.todos.find(t => t.id === src);
+      if (!srcTodo) { dragSrcId = null; return; }
+      if (srcTodo.projectId === projectId && isPending(srcTodo) === isPendingGroup) {
+        // 같은 그룹 내 순서 변경
+        const tgtTodo = state.todos.find(t => t.id === item.dataset.id && t.projectId === projectId);
+        if (tgtTodo) {
+          const srcOrd = srcTodo.order ?? 0;
+          srcTodo.order = tgtTodo.order ?? 0;
+          tgtTodo.order = srcOrd;
+        }
+      } else {
+        // 다른 패널(Pending↔반영Todo)에서 옮겨온 경우: 버킷 이동
+        srcTodo.pending = isPendingGroup;
+      }
       dragSrcId = null;
       scheduleSave(); render();
     });
