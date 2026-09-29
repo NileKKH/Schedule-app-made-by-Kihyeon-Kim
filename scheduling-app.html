@@ -3651,8 +3651,6 @@ function setupBucketDropTarget(elId, targetPending) {
   });
   el.addEventListener('drop', (e) => {
     if (!state.draggingTodoId) return;
-    const isPlainSort = !!e.dataTransfer.getData('text/sort');
-    if (isPlainSort && e.target.closest('.todo-item')) return; // 개별 항목 드롭 핸들러가 이미 처리
     if (state.draggingFromCalendar && state.ctrlDragging) {
       state.draggingTodoId = null; state.draggingFromCalendar = false; state.ctrlDragging = false;
       return;
@@ -3667,10 +3665,11 @@ function setupBucketDropTarget(elId, targetPending) {
           todo.startDate = null; todo.endDate = null;
           todo.pending = targetPending;
         }
-      } else {
+        scheduleSave(); render();
+      } else if (needsSchedule(todo)) {
         todo.pending = targetPending;
+        scheduleSave(); render();
       }
-      scheduleSave(); render();
     }
     state.draggingTodoId = null;
     state.draggingFromCalendar = false;
@@ -4887,7 +4886,7 @@ function openTodoDetailModal(todoId) {
   const instances = state.todos.filter(x => x.startDate && (x.id === originId || x.parentId === originId));
   let metaHtml;
   if (instances.length === 0) {
-    metaHtml = '📅 날짜 미지정';
+    metaHtml = isPending(origin) ? '📅 Pending' : '📅 날짜 미지정';
   } else {
     const dateLines = instances
       .sort((a, b) => a.startDate.localeCompare(b.startDate))
@@ -5049,18 +5048,17 @@ function enableTodoDragSort(groupEl, projectId, isPendingGroup) {
       if (!srcTodo) { dragSrcId = null; return; }
       if (srcTodo.projectId === projectId && isPending(srcTodo) === isPendingGroup) {
         // 같은 그룹 내 순서 변경
+        e.stopPropagation();
         const tgtTodo = state.todos.find(t => t.id === item.dataset.id && t.projectId === projectId);
         if (tgtTodo) {
           const srcOrd = srcTodo.order ?? 0;
           srcTodo.order = tgtTodo.order ?? 0;
           tgtTodo.order = srcOrd;
+          scheduleSave(); render();
         }
-      } else {
-        // 다른 패널(Pending↔반영Todo)에서 옮겨온 경우: 버킷 이동
-        srcTodo.pending = isPendingGroup;
       }
+      // 다른 패널(Pending↔반영Todo)에서 옮겨온 경우엔 처리하지 않고 상위 컨테이너로 버블링시켜 그쪽에서 버킷 이동 처리
       dragSrcId = null;
-      scheduleSave(); render();
     });
     item.addEventListener('dragend', () => { dragSrcId = null; item.style.boxShadow = ''; });
   });
