@@ -585,6 +585,10 @@
     color: #dc3545; cursor: pointer; font-size: 0.68rem; flex-shrink: 0;
   }
   .cal-todo-block:hover .cal-todo-del { opacity: 1; }
+  .todo-detail-del-x {
+    color: #dc3545; cursor: pointer; font-size: 0.75rem;
+    margin-left: 6px; padding: 2px 4px;
+  }
   .resize-handle {
     cursor: col-resize;
     color: #bbb;
@@ -4882,28 +4886,53 @@ function openTodoDetailModal(todoId) {
   const originId = t.parentId || t.id;
   const origin = state.todos.find(x => x.id === originId) || t;
 
-  // 원본 기준 모든 배정 인스턴스 수집
-  const instances = state.todos.filter(x => x.startDate && (x.id === originId || x.parentId === originId));
-  let metaHtml;
-  if (instances.length === 0) {
-    metaHtml = isPending(origin) ? '📅 Pending' : '📅 날짜 미지정';
-  } else {
-    const dateLines = instances
-      .sort((a, b) => a.startDate.localeCompare(b.startDate))
-      .map(inst => {
-        const ds = inst.startDate === inst.endDate
-          ? inst.startDate
-          : `${inst.startDate} ~ ${inst.endDate}`;
-        const ts = inst.time ? ` ${inst.time}` : '';
-        return `📅 ${ds}${ts}`;
-      })
-      .join('<br>');
-    metaHtml = dateLines;
+  // 원본 기준 모든 배정 인스턴스 수집 + X 삭제 버튼 포함 렌더링
+  function renderDetailMeta() {
+    const instances = state.todos.filter(x => x.startDate && (x.id === originId || x.parentId === originId));
+    let metaHtml;
+    if (instances.length === 0) {
+      metaHtml = isPending(origin)
+        ? '📅 Pending <span class="todo-detail-del-x" data-type="pending" title="Pending 해제">✕</span>'
+        : '📅 날짜 미지정';
+    } else {
+      metaHtml = instances
+        .sort((a, b) => a.startDate.localeCompare(b.startDate))
+        .map(inst => {
+          const ds = inst.startDate === inst.endDate
+            ? inst.startDate
+            : `${inst.startDate} ~ ${inst.endDate}`;
+          const ts = inst.time ? ` ${inst.time}` : '';
+          return `📅 ${ds}${ts} <span class="todo-detail-del-x" data-type="instance" data-instid="${inst.id}" title="일정에서 제거">✕</span>`;
+        })
+        .join('<br>');
+    }
+    const latestCompletedAt = getLatestCompletedAt(origin);
+    if (latestCompletedAt) {
+      metaHtml += `<br><span style="color:#9aa0a6;">✔ 완료: ${formatCompletedAt(latestCompletedAt)}</span>`;
+    }
+    document.getElementById('modal-todo-detail-meta').innerHTML = metaHtml;
   }
-  const latestCompletedAt = getLatestCompletedAt(origin);
-  if (latestCompletedAt) {
-    metaHtml += `<br><span style="color:#9aa0a6;">✔ 완료: ${formatCompletedAt(latestCompletedAt)}</span>`;
-  }
+  renderDetailMeta();
+
+  document.getElementById('modal-todo-detail-meta').onclick = (e) => {
+    const btn = e.target.closest('.todo-detail-del-x');
+    if (!btn) return;
+    if (btn.dataset.type === 'pending') {
+      origin.pending = false;
+    } else if (btn.dataset.type === 'instance') {
+      const inst = state.todos.find(x => x.id === btn.dataset.instid);
+      if (inst) {
+        if (inst.parentId) {
+          state.todos = state.todos.filter(x => x.id !== inst.id);
+        } else {
+          inst.startDate = null;
+          inst.endDate = null;
+        }
+      }
+    }
+    scheduleSave(); render(); refreshMobileDayView();
+    renderDetailMeta();
+  };
 
   // 프로젝트 드롭다운 채우기
   const projSel = document.getElementById('select-todo-detail-project');
@@ -4915,7 +4944,6 @@ function openTodoDetailModal(todoId) {
   });
   projSel.value = origin.projectId;
 
-  document.getElementById('modal-todo-detail-meta').innerHTML = metaHtml;
   document.getElementById('input-todo-detail-title').value = origin.title;
   document.getElementById('select-todo-detail-priority').value = origin.priority || 'none';
   document.getElementById('input-todo-detail-time').value = origin.time || '';
