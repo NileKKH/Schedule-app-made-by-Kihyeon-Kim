@@ -1445,6 +1445,8 @@
     <select id="select-assign-project"></select>
     <label>시작일</label>
     <input type="date" id="input-assign-start">
+    <label>기간 (일수, 선택)</label>
+    <input type="number" id="input-assign-days" min="1" placeholder="예: 3일이면 3 입력">
     <label>종료일</label>
     <input type="date" id="input-assign-end">
     <div class="modal-btns">
@@ -2682,6 +2684,9 @@ function compareCalendarTodos(a, b) {
     if (timeOrder !== 0) return timeOrder;
   }
 
+  const alldayOrder = Number(isAllDayTodo(b)) - Number(isAllDayTodo(a));
+  if (alldayOrder !== 0) return alldayOrder;
+
   const projectA = getCalendarProjectOrder(a.projectId);
   const projectB = getCalendarProjectOrder(b.projectId);
   if (projectA !== projectB) return projectA - projectB;
@@ -2887,16 +2892,23 @@ function renderCalendar() {
         }
       });
 
+      // 복사 모드 중이면 클릭한 날짜에 붙여넣기 (우선순위 최상단)
       // 모바일: 배정 모드에서는 날짜 배정, 그 외에는 해당 날짜 일정 확대
-      if (isMobile()) {
-        cell.addEventListener('click', () => {
+      cell.addEventListener('click', (e) => {
+        if (_copyPayload) {
+          e.stopPropagation();
+          pasteTodoCopyAt({ startDate: ds });
+          cancelTodoCopyMode();
+          return;
+        }
+        if (isMobile()) {
           if (state.mobileAssigningTodoId) {
             confirmMobileAssignDate(ds);
           } else {
             openMobileDayView(ds);
           }
-        });
-      }
+        }
+      });
 
       grid.appendChild(cell);
     });
@@ -3045,6 +3057,21 @@ function renderCalendar() {
             t.startDate = null; t.endDate = null;
           }
           scheduleSave(); render();
+        });
+        bar.addEventListener('contextmenu', (e) => {
+          e.stopPropagation();
+          showCtxMenu(e, [
+            { label: '상세보기/수정', action: () => openTodoDetailModal(t.id) },
+            { label: '복사하기', action: () => startTodoCopyMode(t) },
+            { label: '삭제', danger: true, action: () => {
+              if (t.parentId) {
+                state.todos = state.todos.filter(x => x.id !== t.id);
+              } else {
+                t.startDate = null; t.endDate = null;
+              }
+              scheduleSave(); render();
+            }},
+          ]);
         });
         bar.draggable = true;
         bar.dataset.tid = t.id;
@@ -3414,9 +3441,25 @@ document.getElementById('btn-add-assign').addEventListener('click', () => {
   const today = toISO(new Date());
   document.getElementById('input-assign-start').value = today;
   document.getElementById('input-assign-end').value = today;
+  document.getElementById('input-assign-days').value = '';
+  _assignEndManual = false;
 
   openModal('modal-assign');
 });
+
+// 시작일 + 기간(일) → 종료일 자동 계산. 단, 종료일을 직접 수정하면 그 값이 항상 우선.
+let _assignEndManual = false;
+function recalcAssignEnd() {
+  if (_assignEndManual) return;
+  const start = document.getElementById('input-assign-start').value;
+  const days = parseInt(document.getElementById('input-assign-days').value, 10);
+  if (start && days > 0) {
+    document.getElementById('input-assign-end').value = addDays(start, days - 1);
+  }
+}
+document.getElementById('input-assign-start').addEventListener('input', recalcAssignEnd);
+document.getElementById('input-assign-days').addEventListener('input', recalcAssignEnd);
+document.getElementById('input-assign-end').addEventListener('input', () => { _assignEndManual = true; });
 
 document.getElementById('btn-save-assign').addEventListener('click', () => {
   const projectId  = document.getElementById('select-assign-project').value;
@@ -3709,6 +3752,13 @@ function setupBucketDropTarget(elId, targetPending) {
 }
 setupBucketDropTarget('todo-scroll', false);
 setupBucketDropTarget('pending-scroll', true);
+document.getElementById('pending-scroll').addEventListener('click', (e) => {
+  if (_copyPayload) {
+    e.stopPropagation();
+    pasteTodoCopyAt({ pending: true });
+    cancelTodoCopyMode();
+  }
+}, true);
 
 document.getElementById('btn-add-recurring').addEventListener('click', () => openRecurringModal());
 document.getElementById('btn-del-recurring').addEventListener('click', () => openRecurringDelModal());
@@ -3745,7 +3795,7 @@ function showCtxMenu(e, items) {
     const el = document.createElement('div');
     el.className = 'ctx-item' + (item.danger ? ' danger' : '');
     el.textContent = item.label;
-    el.addEventListener('click', () => { hideCtxMenu(); item.action(); });
+    el.addEventListener('click', (ev) => { ev.stopPropagation(); hideCtxMenu(); item.action(); });
     ctxMenu.appendChild(el);
   });
   ctxMenu.classList.add('show');
@@ -3759,12 +3809,61 @@ document.addEventListener('click', hideCtxMenu);
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     hideCtxMenu();
+    cancelTodoCopyMode();
     // 열려 있는 모달 닫기 (setup-screen 제외)
     document.querySelectorAll('.modal-overlay.active').forEach(overlay => {
       overlay.classList.remove('active');
     });
   }
 });
+
+// ============================================================
+// Todo 블럭 복사 (우클릭 → 복사하기 → 원하는 날짜/Pending에 클릭하여 붙여넣기)
+// ============================================================
+let _copyPayload = null;
+let _copyGhostEl = null;
+
+function startTodoCopyMode(t) {
+  _copyPayload = {
+    projectId: t.projectId,
+    title: t.title,
+    priority: t.priority,
+    invi: !!t.invi,
+    allDay: !!t.allDay,
+    time: t.time || null,
+    memo: t.memo || null,
+    _memoRich: !!t._memoRich,
+  };
+  if (_copyGhostEl) _copyGhostEl.remove();
+  const ghost = document.createElement('div');
+  ghost.id = 'todo-copy-ghost';
+  ghost.textContent = `📋 ${t.title}`;
+  ghost.style.cssText = 'position:fixed;z-index:9999;pointer-events:none;opacity:0.55;background:#fff;border:2px dashed var(--primary);border-radius:6px;padding:4px 10px;font-size:0.8rem;box-shadow:0 2px 8px rgba(0,0,0,0.2);max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+  document.body.appendChild(ghost);
+  _copyGhostEl = ghost;
+}
+function cancelTodoCopyMode() {
+  _copyPayload = null;
+  if (_copyGhostEl) { _copyGhostEl.remove(); _copyGhostEl = null; }
+}
+function pasteTodoCopyAt({ startDate = null, pending = false } = {}) {
+  if (!_copyPayload) return;
+  const maxOrder = state.todos.filter(x => x.projectId === _copyPayload.projectId).reduce((m,x) => Math.max(m, x.order||0), -1);
+  state.todos.push({
+    id: uuid(), projectId: _copyPayload.projectId, title: _copyPayload.title,
+    priority: _copyPayload.priority, invi: _copyPayload.invi, allDay: _copyPayload.allDay,
+    time: _copyPayload.time, memo: _copyPayload.memo, _memoRich: _copyPayload._memoRich,
+    startDate, endDate: startDate, done: false, pending, order: maxOrder+1,
+  });
+  scheduleSave(); render();
+}
+document.addEventListener('mousemove', e => {
+  if (_copyGhostEl) {
+    _copyGhostEl.style.left = (e.clientX + 14) + 'px';
+    _copyGhostEl.style.top  = (e.clientY + 14) + 'px';
+  }
+});
+document.addEventListener('click', () => { if (_copyPayload) cancelTodoCopyMode(); });
 
 // 패널 1 프로젝트 우클릭
 function getProjectCtxItems(p) {
@@ -4533,6 +4632,7 @@ function attachTodoCtx(el, t) {
     e.stopPropagation();
     const items = [];
     items.push({ label: '상세보기/수정', action: () => openTodoDetailModal(t.id) });
+    items.push({ label: '복사하기', action: () => startTodoCopyMode(t) });
     items.push({ label: '캘린더 날짜 배정', action: () => {
       if (isMobile()) startMobileAssign(t.id);
       else openAssignDateModal(t.id);
