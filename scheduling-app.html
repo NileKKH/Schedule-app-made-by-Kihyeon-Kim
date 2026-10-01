@@ -209,6 +209,11 @@
   .mobile-day-todo.invi-block:not(.done) {
     border: 3px solid #dc2626 !important;
   }
+  .todo-item.allday-block:not(.done-item):not(.invi-block),
+  .span-bar.todo-bar.allday-block:not(.done-block):not(.invi-block),
+  .mobile-day-todo.allday-block:not(.done):not(.invi-block) {
+    border: 3px solid #2563eb !important;
+  }
   .todo-item-row {
     display: flex;
     align-items: center;
@@ -220,6 +225,7 @@
     font-size: 0.68rem;
     font-weight: 700;
     line-height: 1.2;
+    padding-left: 24px;
   }
   .todo-item.need-schedule-item .todo-title {
     color: var(--unassigned-text);
@@ -311,7 +317,7 @@
   }
   .todo-invi-time-row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
     gap: 5px;
   }
   .todo-invi-check {
@@ -1538,6 +1544,10 @@
       <input type="checkbox" id="input-todo-detail-invi" style="width:auto;margin:0;">
       <span>invi 여부</span>
     </label>
+    <label style="display:flex;align-items:center;gap:6px;margin-bottom:10px;cursor:pointer;">
+      <input type="checkbox" id="input-todo-detail-allday" style="width:auto;margin:0;">
+      <span>당일해결필요</span>
+    </label>
     <label style="display:flex;align-items:center;justify-content:space-between;">
       <span>메모 (선택)</span>
       <button type="button" id="btn-expand-memo" style="background:none;border:none;color:var(--primary-text);font-size:0.75rem;cursor:pointer;text-decoration:underline;padding:0;">자세히 보기 ⤢</button>
@@ -1725,6 +1735,9 @@ function isBetween(ds, start, end) {
 }
 function isInviTodo(todo) {
   return !!(todo && todo.invi && todo.time);
+}
+function isAllDayTodo(todo) {
+  return !!(todo && todo.allDay);
 }
 function getWeekStart(dateStr) {
   // 해당 날짜가 속한 주의 일요일 반환
@@ -2215,14 +2228,15 @@ function setTodoCompletion(todoId, done) {
   render();
 }
 
-function buildTodoItem(t, color, showProjectLabel) {
+function buildTodoItem(t, color, showProjectLabel, highlightNeedSchedule = true) {
   const instances = state.todos.filter(x => x.startDate && (x.id === t.id || x.parentId === t.id));
   const instCount = instances.length;
   const allDone = instCount > 0 && instances.every(x => x.done);
   const pMeta = PRIORITY_META[t.priority || 'none'];
+  const needsSched = highlightNeedSchedule && needsSchedule(t);
 
   const item = document.createElement('div');
-  item.className = 'todo-item' + (allDone ? ' done-item' : '') + (isInviTodo(t) ? ' invi-block' : '');
+  item.className = 'todo-item' + (allDone ? ' done-item' : '') + (isInviTodo(t) ? ' invi-block' : '') + (isAllDayTodo(t) ? ' allday-block' : '') + (needsSched ? ' need-schedule-item' : '');
   item.style.borderLeft = allDone ? `1px dotted #bbb` : `3px solid ${color.border}`;
   item.draggable = true;
   item.dataset.id = t.id;
@@ -2231,6 +2245,7 @@ function buildTodoItem(t, color, showProjectLabel) {
     : '';
   const latestCompletedAt = allDone ? getLatestCompletedAt(t) : null;
   const completedLabel = latestCompletedAt ? `<span class="todo-completed-at">완료: ${formatCompletedAt(latestCompletedAt)}</span>` : '';
+  const needScheduleLabel = needsSched ? `<span class="need-schedule">⚠ 일정반영필요</span>` : '';
   item.innerHTML = `
     <div class="todo-item-row">
       <input type="checkbox" class="done-checkbox" ${allDone ? 'checked' : ''}>
@@ -2241,6 +2256,7 @@ function buildTodoItem(t, color, showProjectLabel) {
       <span class="todo-title">${t.title}</span>
       <button class="todo-del" title="삭제">✕</button>
     </div>
+    ${needScheduleLabel}
     ${completedLabel}
   `;
 
@@ -2291,7 +2307,7 @@ function buildTodoItem(t, color, showProjectLabel) {
 function buildDateTodoItem(t, color) {
   const pMeta = PRIORITY_META[t.priority || 'none'];
   const item = document.createElement('div');
-  item.className = 'todo-item' + (t.done ? ' done-item' : '') + (isInviTodo(t) ? ' invi-block' : '');
+  item.className = 'todo-item' + (t.done ? ' done-item' : '') + (isInviTodo(t) ? ' invi-block' : '') + (isAllDayTodo(t) ? ' allday-block' : '');
   item.style.borderLeft = t.done ? '1px dotted #bbb' : `3px solid ${color.border}`;
   const project = state.projects.find(p => p.id === t.projectId);
   const endDate = t.endDate || t.startDate;
@@ -2516,19 +2532,30 @@ function renderTodos() {
     inviLabel.appendChild(inviInput);
     inviLabel.appendChild(inviText);
 
+    const alldayLabel = document.createElement('label');
+    alldayLabel.className = 'todo-invi-check';
+    const alldayInput = document.createElement('input');
+    alldayInput.type = 'checkbox';
+    alldayInput.id = 'inline-todo-allday';
+    const alldayText = document.createElement('span');
+    alldayText.textContent = '당일해결필요';
+    alldayLabel.appendChild(alldayInput);
+    alldayLabel.appendChild(alldayText);
+
     const timeInput = document.createElement('input');
     timeInput.type = 'time';
     timeInput.id = 'inline-todo-time';
     timeInput.setAttribute('aria-label', '시간');
 
     inviTimeRow.appendChild(inviLabel);
+    inviTimeRow.appendChild(alldayLabel);
     inviTimeRow.appendChild(timeInput);
 
     const inp = document.createElement('input');
     inp.type = 'text'; inp.placeholder = '업무 내용 입력 후 Enter';
     inp.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && inp.value.trim()) {
-        const newId = addTodo(sel.value, inp.value.trim(), priSel.value, inviInput.checked, timeInput.value || null);
+        const newId = addTodo(sel.value, inp.value.trim(), priSel.value, inviInput.checked, timeInput.value || null, alldayInput.checked);
         inp.value = '';
         if (isMobile()) startMobileAssign(newId);
       }
@@ -2538,7 +2565,7 @@ function renderTodos() {
     btn.textContent = '+ Todo 추가';
     btn.addEventListener('click', () => {
       if (inp.value.trim()) {
-        const newId = addTodo(sel.value, inp.value.trim(), priSel.value, inviInput.checked, timeInput.value || null);
+        const newId = addTodo(sel.value, inp.value.trim(), priSel.value, inviInput.checked, timeInput.value || null, alldayInput.checked);
         inp.value = '';
         if (isMobile()) startMobileAssign(newId);
       }
@@ -2586,18 +2613,18 @@ function renderPendingTodos() {
     group.appendChild(lbl);
 
     todos.forEach(t => {
-      group.appendChild(buildTodoItem(t, color, false));
+      group.appendChild(buildTodoItem(t, color, false, false));
     });
     enableTodoDragSort(group, p.id, true);
     el.appendChild(group);
   });
 }
 
-function addTodo(projectId, title, priority, invi = false, time = null) {
+function addTodo(projectId, title, priority, invi = false, time = null, allDay = false) {
   if (!projectId) return null;
   const maxOrder = state.todos.filter(t => t.projectId === projectId).reduce((m,t) => Math.max(m, t.order||0), -1);
   const id = uuid();
-  state.todos.push({ id, projectId, title, priority: priority || 'none', invi: !!invi, time: time || null, startDate: null, endDate: null, done: false, pending: false, order: maxOrder+1 });
+  state.todos.push({ id, projectId, title, priority: priority || 'none', invi: !!invi, time: time || null, allDay: !!allDay, startDate: null, endDate: null, done: false, pending: false, order: maxOrder+1 });
   scheduleSave(); render();
   return id;
 }
@@ -2982,7 +3009,7 @@ function renderCalendar() {
       const topPx = DAY_NUM_H + maxAssignInRange * (BAR_H + BAR_GAP) + laneIdx * (BAR_H + BAR_GAP);
 
       const bar = document.createElement('div');
-      bar.className = 'span-bar todo-bar' + (t.done ? ' done-block' : '') + (isInviTodo(t) ? ' invi-block' : '');
+      bar.className = 'span-bar todo-bar' + (t.done ? ' done-block' : '') + (isInviTodo(t) ? ' invi-block' : '') + (isAllDayTodo(t) ? ' allday-block' : '');
       if (!t.done) {
         bar.style.background = color.bg;
         bar.style.borderLeftColor = color.border;
@@ -3532,7 +3559,7 @@ function renderMobileDayView() {
   todos.forEach(todo => {
     const project = state.projects.find(p => p.id === todo.projectId);
     const item = document.createElement(todo._recurring ? 'div' : 'button');
-    item.className = `mobile-day-todo${todo.done ? ' done' : ''}${todo._recurring ? ' recurring' : ''}${isInviTodo(todo) ? ' invi-block' : ''}`;
+    item.className = `mobile-day-todo${todo.done ? ' done' : ''}${todo._recurring ? ' recurring' : ''}${isInviTodo(todo) ? ' invi-block' : ''}${isAllDayTodo(todo) ? ' allday-block' : ''}`;
     if (!todo._recurring) item.type = 'button';
     const meta = [
       todo._recurring ? '반복 일정' : '',
@@ -4767,7 +4794,7 @@ function assignTodoToDateRange(todoId, start, end) {
     const originId = todo.parentId || todo.id;
     state.todos.push({ id: uuid(), projectId: todo.projectId, title: todo.title,
       parentId: originId, startDate: start, endDate: end, done: false, order: todo.order,
-      priority: todo.priority, calOrder: getNextCalendarTodoOrder(todo), invi: !!todo.invi, time: todo.time || null, memo: todo.memo || null, _memoRich: !!todo._memoRich, completedAt: null });
+      priority: todo.priority, calOrder: getNextCalendarTodoOrder(todo), invi: !!todo.invi, allDay: !!todo.allDay, time: todo.time || null, memo: todo.memo || null, _memoRich: !!todo._memoRich, completedAt: null });
   } else {
     todo.startDate = start;
     todo.endDate = end;
@@ -4948,6 +4975,7 @@ function openTodoDetailModal(todoId) {
   document.getElementById('select-todo-detail-priority').value = origin.priority || 'none';
   document.getElementById('input-todo-detail-time').value = origin.time || '';
   document.getElementById('input-todo-detail-invi').checked = !!origin.invi;
+  document.getElementById('input-todo-detail-allday').checked = !!origin.allDay;
   document.getElementById('input-todo-detail-memo').innerHTML = memoToDisplayHtml(origin);
 
   document.getElementById('btn-todo-detail-add-schedule').onclick = () => {
@@ -4961,6 +4989,7 @@ function openTodoDetailModal(todoId) {
     const newProjectId= projSel.value;
     const time = document.getElementById('input-todo-detail-time').value || null;
     const invi = document.getElementById('input-todo-detail-invi').checked;
+    const allDay = document.getElementById('input-todo-detail-allday').checked;
     const memoEl = document.getElementById('input-todo-detail-memo');
     const memoText = memoEl.textContent.trim();
     const memo = memoText ? memoEl.innerHTML : null;
@@ -4971,6 +5000,7 @@ function openTodoDetailModal(todoId) {
         x.projectId = newProjectId;
         x.time = time;
         x.invi = invi;
+        x.allDay = allDay;
         x.memo = memo;
         x._memoRich = !!memo;
       }
