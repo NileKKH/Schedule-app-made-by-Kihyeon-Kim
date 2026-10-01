@@ -3058,21 +3058,7 @@ function renderCalendar() {
           }
           scheduleSave(); render();
         });
-        bar.addEventListener('contextmenu', (e) => {
-          e.stopPropagation();
-          showCtxMenu(e, [
-            { label: '상세보기/수정', action: () => openTodoDetailModal(t.id) },
-            { label: '복사하기', action: () => startTodoCopyMode(t) },
-            { label: '삭제', danger: true, action: () => {
-              if (t.parentId) {
-                state.todos = state.todos.filter(x => x.id !== t.id);
-              } else {
-                t.startDate = null; t.endDate = null;
-              }
-              scheduleSave(); render();
-            }},
-          ]);
-        });
+        attachBarCtx(bar, t);
         bar.draggable = true;
         bar.dataset.tid = t.id;
         bar.addEventListener('dragstart', (e) => {
@@ -3132,7 +3118,6 @@ function renderCalendar() {
           e.stopPropagation();
           state.resizingTodoId = t.id;
         });
-        attachBarCtx(bar, t);
 
         // PC: 클릭 → 상세 모달
         if (!isMobile()) {
@@ -4986,6 +4971,7 @@ function attachBarCtx(el, t) {
     const originId = t.parentId || t.id;
     showCtxMenu(e, [
       { label: '🔍 상세 보기 / 메모', action: () => openTodoDetailModal(t.id) },
+      { label: '복사하기', action: () => startTodoCopyMode(t) },
       { label: '내용 수정', action: () => openEditTodoModal(originId) },
       { label: '일정에서 제거', action: () => {
         if (t.parentId) {
