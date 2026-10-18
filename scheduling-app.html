@@ -2918,6 +2918,25 @@ function renderCalendar() {
     // ── span overlay ──────────────────────────────────────────
     const spanLayer = document.createElement('div');
     spanLayer.className = 'span-layer';
+    // 배정바/반복바 등 드롭 핸들러가 없는 막대 위에 놓아도 아래 날짜 셀로 전달
+    const _cellAtX = (e) => Array.from(grid.children).find(c => {
+      const r = c.getBoundingClientRect();
+      return e.clientX >= r.left && e.clientX < r.right;
+    });
+    spanLayer.addEventListener('dragover', (e) => {
+      if (!state.draggingTodoId || (state.draggingFromCalendar && !state.ctrlDragging)) return;
+      e.preventDefault();
+      grid.querySelectorAll('.day-cell.drop-hover').forEach(c => c.classList.remove('drop-hover'));
+      const c = _cellAtX(e);
+      if (c) c.classList.add('drop-hover');
+    });
+    spanLayer.addEventListener('drop', (e) => {
+      if (!state.draggingTodoId || (state.draggingFromCalendar && !state.ctrlDragging)) return;
+      const c = _cellAtX(e);
+      if (!c) return;
+      e.preventDefault();
+      c.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true }));
+    });
 
     // 셀 좌표 기반 bar 위치 계산 (모바일 불균등 컬럼 대응)
     // DOM이 그려진 후 실제 셀 offsetLeft/offsetWidth를 읽어서 적용
@@ -3069,8 +3088,21 @@ function renderCalendar() {
           e.dataTransfer.setData('text/cal-sort', t.id);
           e.dataTransfer.effectAllowed = e.ctrlKey ? 'copy' : 'move';
         });
+        // 패널2/3 드래그 또는 Ctrl 복사 드래그는 막대 아래 날짜 셀로 전달 (막대 위에 놓아도 해당 날짜에 배정)
+        const cellUnder = (e) => Array.from(grid.children).find(c => {
+          const r = c.getBoundingClientRect();
+          return e.clientX >= r.left && e.clientX < r.right;
+        });
         bar.addEventListener('dragover', (e) => {
-          if (!state.draggingFromCalendar || state.ctrlDragging) return;
+          if (!state.draggingFromCalendar || state.ctrlDragging) {
+            if (!state.draggingTodoId) return;
+            e.preventDefault();
+            e.stopPropagation();
+            grid.querySelectorAll('.day-cell.drop-hover').forEach(c => c.classList.remove('drop-hover'));
+            const c = cellUnder(e);
+            if (c) c.classList.add('drop-hover');
+            return;
+          }
           const source = state.todos.find(todo => todo.id === state.draggingTodoId);
           if (source && source.id === t.id) {
             e.preventDefault();
@@ -3090,6 +3122,14 @@ function renderCalendar() {
         bar.addEventListener('drop', (e) => {
           bar.style.boxShadow = '';
           const srcId = e.dataTransfer.getData('text/cal-sort');
+          if (!state.draggingFromCalendar || state.ctrlDragging) {
+            const c = cellUnder(e);
+            if (!c || !state.draggingTodoId) return;
+            e.preventDefault();
+            e.stopPropagation();
+            c.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true }));
+            return;
+          }
           if (!srcId || state.ctrlDragging) return;
           const source = state.todos.find(todo => todo.id === srcId);
           if (source && source.id === t.id) {
@@ -3653,7 +3693,7 @@ function startMobileAssign(todoId) {
   if (!todo) return;
   const chip = document.getElementById('mobile-assign-chip');
   chip.style.display = 'flex';
-  chip.innerHTML = `📌 배정 중: <strong>${todo.title}</strong><button onclick="cancelMobileAssign()" style="background:rgba(255,255,255,0.3);border:none;color:#fff;border-radius:10px;padding:2px 8px;cursor:pointer;margin-left:8px;font-size:0.8rem;">취소</button>`;
+  chip.innerHTML = `📌 배정 중: <strong>${todo.title}</strong><button onclick="cancelMobileAssign()" style="background:rgba(255,255,255,0.3);border:none;color:#fff;border-radius:10px;padding:2px 8px;cursor:pointer;margin-left:8px;font-size:0.8rem;">취소</button><button onclick="assignMobilePending()" style="background:rgba(255,255,255,0.3);border:none;color:#fff;border-radius:10px;padding:2px 8px;cursor:pointer;margin-left:6px;font-size:0.8rem;">⏳ Pending</button>`;
   switchMobileTab(4);
 }
 
@@ -3661,6 +3701,13 @@ function clearMobileAssignState() {
   state.mobileAssigningTodoId = null;
   const chip = document.getElementById('mobile-assign-chip');
   if (chip) chip.style.display = 'none';
+}
+
+function assignMobilePending() {
+  const todo = state.todos.find(t => t.id === state.mobileAssigningTodoId);
+  if (todo) { todo.pending = true; scheduleSave(); render(); }
+  clearMobileAssignState();
+  if (isMobile()) switchMobileTab(3);
 }
 
 function cancelMobileAssign() {
