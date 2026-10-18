@@ -3109,9 +3109,12 @@ function renderCalendar() {
             e.stopPropagation();
             return;
           }
-          if (!canReorderCalendarTodos(source, t)) return;
           e.preventDefault();
           e.stopPropagation();
+          grid.querySelectorAll('.day-cell.drop-hover').forEach(c => c.classList.remove('drop-hover'));
+          const hc = cellUnder(e);
+          if (hc) hc.classList.add('drop-hover');
+          if (!canReorderCalendarTodos(source, t)) return;
           const rect = bar.getBoundingClientRect();
           const placeAfter = e.clientY >= rect.top + rect.height / 2;
           bar.style.boxShadow = placeAfter
@@ -3137,15 +3140,26 @@ function renderCalendar() {
             e.stopPropagation();
             return;
           }
-          if (!canReorderCalendarTodos(source, t)) return;
           e.preventDefault();
           e.stopPropagation();
-          const rect = bar.getBoundingClientRect();
-          const placeAfter = e.clientY >= rect.top + rect.height / 2;
-          const moved = moveCalendarTodo(srcId, t.id, placeAfter);
+          // 다른 날짜의 막대 위에 놓으면 먼저 그 날짜로 이동(기간 유지), 이후 순서 재배치
+          const dc = cellUnder(e);
+          let dateMoved = false;
+          if (source && dc && dc.dataset.date && source.startDate !== dc.dataset.date) {
+            const duration = source.endDate ? Math.round((parseDate(source.endDate) - parseDate(source.startDate)) / 86400000) : 0;
+            source.startDate = dc.dataset.date;
+            source.endDate = addDays(dc.dataset.date, duration);
+            dateMoved = true;
+          }
+          let moved = false;
+          if (canReorderCalendarTodos(source, t)) {
+            const rect = bar.getBoundingClientRect();
+            const placeAfter = e.clientY >= rect.top + rect.height / 2;
+            moved = moveCalendarTodo(srcId, t.id, placeAfter);
+          }
           state.draggingTodoId = null;
           state.draggingFromCalendar = false;
-          if (moved) { scheduleSave(); render(); }
+          if (moved || dateMoved) { scheduleSave(); render(); }
         });
         bar.addEventListener('dragend', () => {
           spanLayer.querySelectorAll('.todo-bar').forEach(b => { b.style.boxShadow = ''; });
