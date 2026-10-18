@@ -837,7 +837,7 @@
   }
 
   /* ===== Todo 완료 필터 바 ===== */
-  #todo-done-filter-bar {
+  #todo-done-filter-bar, #pending-done-filter-bar {
     display: flex;
     align-items: center;
     gap: 6px;
@@ -846,7 +846,7 @@
     flex-shrink: 0;
     flex-wrap: wrap;
   }
-  #todo-done-filter-toggle {
+  #todo-done-filter-toggle, #pending-done-filter-toggle {
     display: flex;
     gap: 0;
     border: 1px solid var(--border);
@@ -1267,6 +1267,13 @@
   <!-- 패널 3: Pending (일정 미반영 Todo) -->
   <div class="panel" id="panel3">
     <div class="panel-header">Pending</div>
+    <div id="pending-done-filter-bar">
+      <div id="pending-done-filter-toggle">
+        <button class="todo-done-filter-btn pending-done-filter-btn active" data-filter="hide" onclick="setPendingDoneFilter('hide')">완료 숨김</button>
+        <button class="todo-done-filter-btn pending-done-filter-btn" data-filter="all" onclick="setPendingDoneFilter('all')">전체</button>
+        <button class="todo-done-filter-btn pending-done-filter-btn" data-filter="only" onclick="setPendingDoneFilter('only')">완료만</button>
+      </div>
+    </div>
     <div class="panel-body" id="pending-scroll"></div>
   </div>
 
@@ -1634,6 +1641,7 @@ let state = {
   showClosedProjects: false,
   calSortDraggingId: null,
   todoView: 'project', // 'project' | 'priority'
+  pendingDoneFilter: 'hide', // 'hide' | 'all' | 'only'
   todoDoneFilter: 'hide', // 'hide' | 'all' | 'only'
   todoDoneSort: 'project', // 'project' | 'recent' (only used when todoDoneFilter === 'only')
 };
@@ -2589,6 +2597,12 @@ function renderTodos() {
   }
 }
 
+function passesPendingDoneFilter(t) {
+  const done = isTodoDone(t);
+  if (state.pendingDoneFilter === 'hide') return !done;
+  if (state.pendingDoneFilter === 'only') return done;
+  return true;
+}
 function renderPendingTodos() {
   const el = document.getElementById('pending-scroll');
   el.innerHTML = '';
@@ -2600,7 +2614,7 @@ function renderPendingTodos() {
 
   filteredProjects.forEach(p => {
     const todos = state.todos
-      .filter(t => t.projectId === p.id && !t.parentId && isPending(t))
+      .filter(t => t.projectId === p.id && !t.parentId && isPending(t) && passesPendingDoneFilter(t))
       .sort((a,b) => (a.order||0) - (b.order||0));
     if (todos.length === 0) return;
 
@@ -2644,12 +2658,20 @@ function setTodoView(view) {
 
 function setTodoDoneFilter(filter) {
   state.todoDoneFilter = filter;
-  document.querySelectorAll('.todo-done-filter-btn').forEach(btn => {
+  document.querySelectorAll('.todo-done-filter-btn:not(.pending-done-filter-btn)').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.filter === filter);
   });
   const sortSel = document.getElementById('todo-done-sort');
   sortSel.style.display = (filter === 'only' && state.todoView !== 'date') ? '' : 'none';
   renderTodos();
+}
+
+function setPendingDoneFilter(filter) {
+  state.pendingDoneFilter = filter;
+  document.querySelectorAll('.pending-done-filter-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.filter === filter);
+  });
+  renderPendingTodos();
 }
 
 function setTodoDoneSort(sort) {
