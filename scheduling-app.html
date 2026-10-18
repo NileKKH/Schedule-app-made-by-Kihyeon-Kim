@@ -2233,7 +2233,7 @@ function setTodoCompletion(todoId, done) {
 function buildTodoItem(t, color, showProjectLabel, highlightNeedSchedule = true) {
   const instances = state.todos.filter(x => x.startDate && (x.id === t.id || x.parentId === t.id));
   const instCount = instances.length;
-  const allDone = instCount > 0 && instances.every(x => x.done);
+  const allDone = isTodoDone(t);
   const pMeta = PRIORITY_META[t.priority || 'none'];
   const needsSched = highlightNeedSchedule && needsSchedule(t);
 
@@ -2362,7 +2362,8 @@ function buildDateTodoItem(t, color) {
 
 function isTodoDone(t) {
   const instances = state.todos.filter(x => x.startDate && (x.id === t.id || x.parentId === t.id));
-  return instances.length > 0 && instances.every(x => x.done);
+  if (instances.length === 0) return !!t.done; // 일정 미반영(Pending 포함) todo는 자기 done 값 사용
+  return instances.every(x => x.done);
 }
 
 function needsSchedule(t) {
